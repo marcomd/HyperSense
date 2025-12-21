@@ -1,0 +1,37 @@
+default: &default
+  dispatchers:
+    - polling_interval: 1
+      batch_size: 500
+  workers:
+    # Trading queue - high priority for market operations
+    - queues: [trading]
+      threads: 2
+      processes: 1
+      polling_interval: 0.1
+
+    # Analysis queue - macro strategy and reasoning
+    - queues: [analysis]
+      threads: 2
+      processes: 1
+      polling_interval: 1
+
+    # Data queue - market snapshots and data collection
+    - queues: [data]
+      threads: 3
+      processes: 1
+      polling_interval: 0.5
+
+    # Default queue - everything else
+    - queues: [default]
+      threads: 2
+      processes: 1
+      polling_interval: 1
+
+development:
+  <<: *default
+
+test:
+  <<: *default
+
+production:
+  <<: *default

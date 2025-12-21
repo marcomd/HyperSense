@@ -1,0 +1,48 @@
+# HyperSense Trading Agent Configuration
+#
+# Override in config/settings.local.yml (not committed to git)
+# or environment-specific files (config/settings/production.yml)
+
+# Trading Assets
+assets:
+  - BTC
+  - ETH
+  - SOL
+  - BNB
+
+# Trading Cycle Configuration
+trading:
+  cycle_interval_minutes: 5      # How often the trading cycle runs (3-15 min)
+  paper_trading: true            # Enable paper trading mode (no real orders)
+
+# Risk Management
+risk:
+  max_position_size: 0.05        # Max 5% of capital per trade
+  min_confidence: 0.6            # Minimum confidence score to execute
+  max_leverage: 10               # Maximum leverage allowed
+  default_leverage: 3            # Default leverage for new positions
+  max_open_positions: 5          # Maximum concurrent positions
+
+# Stop Loss / Take Profit Defaults (percentage)
+defaults:
+  stop_loss_pct: 0.05            # 5% stop loss
+  take_profit_pct: 0.10          # 10% take profit
+
+# Context Weights for Reasoning
+weights:
+  forecast: 0.6
+  sentiment: 0.2
+  technical: 0.15
+  whale_alerts: 0.05
+
+# Macro Strategy
+macro:
+  refresh_interval_hours: 24     # How often to refresh macro strategy
+  lookback_days: 7               # Days of data for macro analysis
+
+# API Rate Limits (requests per minute)
+rate_limits:
+  binance: 1200
+  coingecko: 50
+  fear_greed: 10
+  hyperliquid: 100

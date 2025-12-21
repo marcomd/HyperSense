@@ -1,0 +1,32 @@
+# HyperSense Recurring Jobs Configuration
+#
+# Trading cycle runs every 5 minutes (adjustable: 3-15 min)
+# Macro strategy refreshes daily
+
+default: &default
+  # Main trading cycle - runs frequently for market analysis and execution
+  trading_cycle:
+    class: TradingCycleJob
+    queue: trading
+    schedule: every 5 minutes
+
+  # Macro strategy analysis - runs daily to set high-level direction
+  macro_strategy:
+    class: MacroStrategyJob
+    queue: analysis
+    schedule: every day at 6am
+
+  # Market data collection - runs more frequently for data pipeline
+  market_snapshot:
+    class: MarketSnapshotJob
+    queue: data
+    schedule: every minute
+
+development:
+  <<: *default
+
+production:
+  <<: *default
+  clear_solid_queue_finished_jobs:
+    command: "SolidQueue::Job.clear_finished_in_batches(sleep_between_batches: 0.3)"
+    schedule: every hour at minute 12

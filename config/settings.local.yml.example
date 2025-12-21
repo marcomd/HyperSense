@@ -1,0 +1,10 @@
+# Local settings - copy to config/settings.local.yml
+# This file should NOT be committed to git
+
+# Override any settings from settings.yml here
+# Example:
+# trading:
+#   paper_trading: false   # Enable live trading (DANGER!)
+#
+# risk:
+#   max_leverage: 5        # Lower leverage for safety
