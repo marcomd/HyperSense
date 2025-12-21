@@ -41,12 +41,15 @@ gem "eth"                    # Ethereum utilities (EIP-712 signing for Hyperliqu
 gem "config"                 # Settings management (config/settings.yml)
 gem "dry-validation"         # Input validation
 
+# Hyperliquid DEX client (forked for write operations)
+gem "hyperliquid", github: "marcomd/hyperliquid"
+
 # Solid Queue Web UI (disabled for API-only mode - enable when adding admin UI)
 # gem "mission_control-jobs"
 
 group :development, :test do
   # See https://guides.rubyonrails.org/debugging_rails_applications.html#debugging-with-the-debug-gem
-  gem "debug", platforms: %i[ mri windows ], require: "debug/prelude"
+  gem "debug" #, platforms: %i[ mri windows ], require: "debug/prelude"
 
   # Audits gems for known security defects (use config/bundler-audit.yml to ignore issues)
   gem "bundler-audit", require: false

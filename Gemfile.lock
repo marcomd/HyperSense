@@ -1,3 +1,11 @@
+GIT
+  remote: https://github.com/marcomd/hyperliquid.git
+  revision: de348c5971d838eefb3705247b1de84023a04285
+  specs:
+    hyperliquid (0.3.0)
+      faraday (~> 2.0)
+      faraday-retry (~> 2.0)
+
 GEM
   remote: https://rubygems.org/
   specs:
@@ -165,6 +173,8 @@ GEM
       logger
     faraday-net_http (3.4.2)
       net-http (~> 0.5)
+    faraday-retry (2.3.2)
+      faraday (~> 2.0)
     feedjira (4.0.1)
       logger (>= 1.0, < 2)
       loofah (>= 2.3.1, < 3)
@@ -464,6 +474,7 @@ DEPENDENCIES
   factory_bot_rails
   faraday
   feedjira
+  hyperliquid!
   kamal
   oj
   pg (~> 1.1)
