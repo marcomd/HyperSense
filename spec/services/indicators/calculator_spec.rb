@@ -7,7 +7,7 @@ RSpec.describe Indicators::Calculator do
   subject(:calculator) { described_class.new }
 
   describe "#ema" do
-    let(:prices) { [22, 23, 24, 25, 26, 27, 28, 29, 30, 31] }
+    let(:prices) { [ 22, 23, 24, 25, 26, 27, 28, 29, 30, 31 ] }
 
     it "calculates EMA correctly" do
       result = calculator.ema(prices, 5)
@@ -16,12 +16,12 @@ RSpec.describe Indicators::Calculator do
     end
 
     it "returns nil when not enough data" do
-      expect(calculator.ema([1, 2, 3], 5)).to be_nil
+      expect(calculator.ema([ 1, 2, 3 ], 5)).to be_nil
     end
 
     it "weights recent prices more heavily" do
-      prices_up = [10, 11, 12, 13, 14, 15, 16, 17, 18, 20]
-      prices_flat = [10, 10, 10, 10, 10, 10, 10, 10, 10, 20]
+      prices_up = [ 10, 11, 12, 13, 14, 15, 16, 17, 18, 20 ]
+      prices_flat = [ 10, 10, 10, 10, 10, 10, 10, 10, 10, 20 ]
 
       ema_up = calculator.ema(prices_up, 5)
       ema_flat = calculator.ema(prices_flat, 5)
@@ -44,11 +44,11 @@ RSpec.describe Indicators::Calculator do
     end
 
     it "returns nil when not enough data" do
-      expect(calculator.rsi([1, 2, 3], 14)).to be_nil
+      expect(calculator.rsi([ 1, 2, 3 ], 14)).to be_nil
     end
 
     context "with mixed gains and losses" do
-      let(:prices) { [44, 44.34, 44.09, 44.15, 43.61, 44.33, 44.83, 45.10, 45.42, 45.84, 46.08, 45.89, 46.03, 45.61, 46.28, 46.28, 46.00, 46.03, 46.41, 46.22] }
+      let(:prices) { [ 44, 44.34, 44.09, 44.15, 43.61, 44.33, 44.83, 45.10, 45.42, 45.84, 46.08, 45.89, 46.03, 45.61, 46.28, 46.28, 46.00, 46.03, 46.41, 46.22 ] }
 
       it "calculates RSI within expected range" do
         result = calculator.rsi(prices, 14)
@@ -66,7 +66,7 @@ RSpec.describe Indicators::Calculator do
     end
 
     it "returns nil when not enough data" do
-      expect(calculator.macd([1, 2, 3])).to be_nil
+      expect(calculator.macd([ 1, 2, 3 ])).to be_nil
     end
   end
 

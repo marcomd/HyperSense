@@ -2,6 +2,29 @@
 
 All notable changes to HyperSense.
 
+## [0.3.0] - 2024-12-21
+
+### Added
+- **Multi-Agent Reasoning Engine** (Phase 3 complete)
+  - `MacroStrategy` model - Daily macro analysis with bias, risk tolerance, key support/resistance levels
+  - `TradingDecision` model - Per-asset trading decisions with operation, direction, confidence, stops
+  - `Reasoning::ContextAssembler` - Assembles market data, indicators, and sentiment for LLM prompts
+  - `Reasoning::DecisionParser` - JSON schema validation using dry-validation contracts
+  - `Reasoning::HighLevelAgent` - Daily macro strategist (runs at 6am via `MacroStrategyJob`)
+  - `Reasoning::LowLevelAgent` - Trade executor for each asset (runs every 5 min via `TradingCycleJob`)
+  - `TradingCycle` orchestrator - Ensures macro strategy freshness, runs low-level agent for all assets
+
+### Changed
+- `MacroStrategyJob` now calls `Reasoning::HighLevelAgent.new.analyze`
+- `TradingCycleJob` now calls `TradingCycle.new.execute`
+- LLM configuration (model, max_tokens, temperature) moved to `config/settings.yml`
+
+### Technical Details
+- Claude model: `claude-sonnet-4-20250514` (configurable via `Settings.llm.model`)
+- Validation schemas: dry-validation contracts with conditional rules
+- Error handling: Fallback to neutral/hold decisions on API errors or invalid responses
+- Test coverage: 155 examples across 6 new spec files
+
 ## [0.2.0] - 2024-12-21
 
 ### Added

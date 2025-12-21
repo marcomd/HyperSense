@@ -1,0 +1,44 @@
+---
+http_interactions:
+- request:
+    method: get
+    uri: https://api.alternative.me/fng/?limit=1
+    body:
+      encoding: US-ASCII
+      string: ''
+    headers:
+      User-Agent:
+      - Faraday v2.14.0
+      Accept-Encoding:
+      - gzip;q=1.0,deflate;q=0.6,identity;q=0.3
+      Accept:
+      - "*/*"
+  response:
+    status:
+      code: 200
+      message: OK
+    headers:
+      Server:
+      - nginx/1.14.2
+      Date:
+      - Sun, 21 Dec 2025 21:47:28 GMT
+      Content-Type:
+      - application/json
+      Transfer-Encoding:
+      - chunked
+      Connection:
+      - keep-alive
+      Vary:
+      - Accept-Encoding
+      Access-Control-Allow-Origin:
+      - "*"
+      Strict-Transport-Security:
+      - max-age=31536000; includeSubDomains
+    body:
+      encoding: ASCII-8BIT
+      string: "{\n\t\"name\": \"Fear and Greed Index\",\n\t\"data\": [\n\t\t{\n\t\t\t\"value\":
+        \"20\",\n\t\t\t\"value_classification\": \"Extreme Fear\",\n\t\t\t\"timestamp\":
+        \"1766275200\",\n\t\t\t\"time_until_update\": \"7952\"\n\t\t}\n\t],\n\t\"metadata\":
+        {\n\t\t\"error\": null\n\t}\n}"
+  recorded_at: Sun, 21 Dec 2025 21:47:28 GMT
+recorded_with: VCR 6.3.1

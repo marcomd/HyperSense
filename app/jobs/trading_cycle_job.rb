@@ -2,13 +2,12 @@
 
 # Main trading cycle job - orchestrates the entire trading workflow
 #
-# Runs every 5 minutes (configurable) to:
-# 1. Fetch current market data
-# 2. Calculate technical indicators
-# 3. Assemble context for LLM
-# 4. Execute reasoning via low-level agent
-# 5. Apply risk management
-# 6. Execute approved trades
+# Runs every 5 minutes (configured in config/recurring.yml) to:
+# 1. Ensure valid macro strategy exists
+# 2. Run low-level agent for all assets
+# 3. Log trading decisions
+# 4. (Phase 4/5) Apply risk management
+# 5. (Phase 4/5) Execute approved trades
 #
 class TradingCycleJob < ApplicationJob
   queue_as :trading
@@ -16,10 +15,13 @@ class TradingCycleJob < ApplicationJob
   def perform
     Rails.logger.info "[TradingCycle] Starting trading cycle..."
 
-    # TODO: Implement trading cycle orchestration
-    # cycle = TradingCycle.new
-    # cycle.execute
+    cycle = TradingCycle.new
+    decisions = cycle.execute
 
-    Rails.logger.info "[TradingCycle] Trading cycle complete"
+    actionable_count = decisions.count(&:actionable?)
+    Rails.logger.info "[TradingCycle] Trading cycle complete: " \
+                      "#{decisions.size} decisions, #{actionable_count} actionable"
+
+    decisions
   end
 end

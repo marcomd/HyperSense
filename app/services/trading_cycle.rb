@@ -4,85 +4,119 @@
 #
 # Coordinates the entire trading workflow:
 # 1. Check/refresh macro strategy
-# 2. Fetch market data
-# 3. Run low-level agent for decision
-# 4. Apply risk management
-# 5. Execute approved trades
-# 6. Log everything
+# 2. Run low-level agent for all assets
+# 3. Log decisions
+# 4. (Phase 4/5) Apply risk management
+# 5. (Phase 4/5) Execute approved trades
 #
 class TradingCycle
   def initialize
     @logger = Rails.logger
   end
 
+  # Execute the full trading cycle
+  # @return [Array<TradingDecision>] Array of decisions made
   def execute
     @logger.info "[TradingCycle] Starting execution..."
 
     # Step 1: Ensure we have a valid macro strategy
-    refresh_macro_strategy if macro_strategy_stale?
+    ensure_macro_strategy
 
-    # Step 2: Fetch current market data
-    market_data = fetch_market_data
+    # Step 2: Get current macro strategy
+    macro_strategy = MacroStrategy.active
+    @logger.info "[TradingCycle] Using macro strategy: #{macro_strategy&.bias || 'none'}"
 
-    # Step 3: Run low-level agent
-    decision = run_low_level_agent(market_data)
+    # Step 3: Run low-level agent for all assets
+    decisions = run_low_level_agent(macro_strategy)
 
-    # Step 4: Apply risk management
-    validated = validate_decision(decision)
+    # Step 4: Log decisions
+    log_decisions(decisions)
 
-    # Step 5: Execute if approved
-    execute_decision(validated) if validated.approved?
+    # Step 5: (Phase 4/5) Risk management and execution
+    # approved = filter_and_approve(decisions)
+    # execute_decisions(approved)
 
     @logger.info "[TradingCycle] Execution complete"
+    decisions
   end
 
   private
 
-  def macro_strategy_stale?
-    # TODO: Check if macro strategy needs refresh
-    # MacroStrategy.current&.stale? || MacroStrategy.none?
-    true
+  # Ensure we have a valid macro strategy, refresh if needed
+  def ensure_macro_strategy
+    return unless MacroStrategy.needs_refresh?
+
+    @logger.info "[TradingCycle] Macro strategy needs refresh, triggering job..."
+    MacroStrategyJob.perform_now
   end
 
-  def refresh_macro_strategy
-    @logger.info "[TradingCycle] Refreshing macro strategy..."
-    # TODO: Queue macro strategy job or run inline
-    # MacroStrategyJob.perform_now
-  end
-
-  def current_macro_strategy
-    # TODO: Fetch current macro strategy
-    # MacroStrategy.current
-    nil
-  end
-
-  def fetch_market_data
-    @logger.info "[TradingCycle] Fetching market data..."
-    # TODO: Implement data fetching
-    # DataIngestion::PriceFetcher.new.fetch_all
-    {}
-  end
-
-  def run_low_level_agent(market_data)
+  # Run low-level agent for all configured assets
+  # @param macro_strategy [MacroStrategy, nil] Current macro strategy
+  # @return [Array<TradingDecision>] Array of decisions
+  def run_low_level_agent(macro_strategy)
     @logger.info "[TradingCycle] Running low-level agent..."
-    # TODO: Implement reasoning
-    # Reasoning::LowLevelAgent.new.decide(
-    #   market_data: market_data,
-    #   macro_strategy: current_macro_strategy
-    # )
-    nil
+
+    agent = Reasoning::LowLevelAgent.new
+    agent.decide_all(macro_strategy: macro_strategy)
   end
 
-  def validate_decision(decision)
-    @logger.info "[TradingCycle] Validating decision..."
-    # TODO: Implement risk management
-    # Risk::RiskManager.new.validate(decision, current_portfolio)
-    nil
+  # Log summary of decisions
+  # @param decisions [Array<TradingDecision>] Decisions to log
+  def log_decisions(decisions)
+    decisions.each do |decision|
+      @logger.info "[TradingCycle] #{decision.symbol}: #{decision.operation} " \
+                   "(confidence: #{decision.confidence}, status: #{decision.status})"
+    end
+
+    actionable = decisions.select(&:actionable?)
+    holds = decisions.select(&:hold?)
+
+    @logger.info "[TradingCycle] Summary: #{actionable.size} actionable, #{holds.size} holds out of #{decisions.size} total"
   end
 
-  def execute_decision(validated_decision)
-    @logger.info "[TradingCycle] Executing decision..."
-    # TODO: Implement trade execution
-    # Execution::TradeExecutor.new.execute(validated_decision)
+  # === Phase 4/5 Methods (TODO) ===
+
+  # Filter decisions through risk management and approve valid ones
+  # @param decisions [Array<TradingDecision>] Decisions to filter
+  # @return [Array<TradingDecision>] Approved decisions
+  def filter_and_approve(decisions)
+    # TODO: Implement in Phase 5
+    # decisions.select do |decision|
+    #   next false unless decision.actionable?
+    #   next false if decision.confidence < Settings.risk.min_confidence
+    #
+    #   risk_result = Risk::RiskManager.new.validate(decision, current_portfolio)
+    #   if risk_result.approved?
+    #     decision.approve!
+    #     true
+    #   else
+    #     decision.reject!(risk_result.reason)
+    #     false
+    #   end
+    # end
+    []
+  end
+
+  # Execute approved decisions
+  # @param approved_decisions [Array<TradingDecision>] Decisions to execute
+  def execute_decisions(approved_decisions)
+    # TODO: Implement in Phase 4
+    # return if Settings.trading.paper_trading
+    #
+    # approved_decisions.each do |decision|
+    #   Execution::TradeExecutor.new.execute(decision)
+    # end
+  end
+
+  # Get current portfolio state
+  # @return [Hash] Portfolio state (positions, capital, etc.)
+  def current_portfolio
+    # TODO: Implement in Phase 4
+    # {
+    #   positions: Position.open.to_a,
+    #   available_capital: calculate_available_capital,
+    #   total_exposure: calculate_total_exposure
+    # }
+    {}
   end
 end

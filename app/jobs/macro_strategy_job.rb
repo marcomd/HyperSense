@@ -2,7 +2,7 @@
 
 # Macro strategy job - high-level market analysis
 #
-# Runs daily (configurable) to:
+# Runs daily at 6am (configured in config/recurring.yml) to:
 # 1. Analyze weekly/daily trends
 # 2. Assess macro sentiment
 # 3. Generate market narrative
@@ -15,11 +15,17 @@ class MacroStrategyJob < ApplicationJob
   def perform
     Rails.logger.info "[MacroStrategy] Starting macro analysis..."
 
-    # TODO: Implement high-level agent analysis
-    # agent = Reasoning::HighLevelAgent.new
-    # strategy = agent.analyze
-    # MacroStrategy.create!(strategy.attributes)
+    agent = Reasoning::HighLevelAgent.new
+    strategy = agent.analyze
+
+    if strategy
+      Rails.logger.info "[MacroStrategy] Created strategy: #{strategy.bias} bias, " \
+                        "risk tolerance: #{strategy.risk_tolerance}"
+    else
+      Rails.logger.warn "[MacroStrategy] Failed to create strategy (API error)"
+    end
 
     Rails.logger.info "[MacroStrategy] Macro analysis complete"
+    strategy
   end
 end

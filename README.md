@@ -1,6 +1,6 @@
 # HyperSense
 
-**Version 0.2.0** | Autonomous AI Trading Agent for cryptocurrency markets.
+**Version 0.3.0** | Autonomous AI Trading Agent for cryptocurrency markets.
 
 ## Overview
 
@@ -82,17 +82,23 @@ HyperSense/
 │   │   │   ├── macro_strategy_job.rb
 │   │   │   └── market_snapshot_job.rb
 │   │   ├── models/
-│   │   │   └── market_snapshot.rb  # Time-series market data
+│   │   │   ├── market_snapshot.rb   # Time-series market data
+│   │   │   ├── macro_strategy.rb    # Daily macro analysis
+│   │   │   └── trading_decision.rb  # Per-asset trade decisions
 │   │   └── services/
 │   │       ├── data_ingestion/
 │   │       │   ├── price_fetcher.rb      # Binance API
 │   │       │   └── sentiment_fetcher.rb  # Fear & Greed Index
 │   │       ├── indicators/
 │   │       │   └── calculator.rb         # EMA, RSI, MACD, Pivots
-│   │       ├── reasoning/           # TODO: Phase 3
+│   │       ├── reasoning/
+│   │       │   ├── context_assembler.rb  # Market data for LLM prompts
+│   │       │   ├── decision_parser.rb    # JSON validation (dry-validation)
+│   │       │   ├── high_level_agent.rb   # Macro strategy (daily)
+│   │       │   └── low_level_agent.rb    # Trade decisions (5 min)
 │   │       ├── execution/           # TODO: Phase 4
 │   │       └── risk/                # TODO: Phase 5
-│   │       └── trading_cycle.rb     # Main orchestrator (stub)
+│   │       └── trading_cycle.rb     # Main orchestrator
 │   ├── config/
 │   │   ├── settings.yml            # Trading parameters
 │   │   ├── recurring.yml           # Job schedules
@@ -248,6 +254,60 @@ MarketSnapshot.for_symbol("ETH").last_hours(24)
 MarketSnapshot.prices_for("BTC", limit: 150)  # For indicator calculation
 ```
 
+### Reasoning Engine (Working)
+
+**High-Level Agent (Macro Strategy):**
+```ruby
+# Runs daily at 6am via MacroStrategyJob
+strategy = Reasoning::HighLevelAgent.new.analyze
+
+strategy.bias            # => "bullish" / "bearish" / "neutral"
+strategy.risk_tolerance  # => 0.7 (scale 0.0-1.0)
+strategy.market_narrative # => "Bitcoin showing strength above 50-day EMA..."
+strategy.support_for("BTC")    # => [95000, 92000]
+strategy.resistance_for("BTC") # => [100000, 105000]
+
+# Check freshness
+MacroStrategy.active       # => Current valid strategy
+MacroStrategy.needs_refresh?  # => true if stale or missing
+```
+
+**Low-Level Agent (Trade Decisions):**
+```ruby
+# Runs every 5 minutes via TradingCycleJob
+agent = Reasoning::LowLevelAgent.new
+
+# Single asset decision
+decision = agent.decide(symbol: "BTC", macro_strategy: MacroStrategy.active)
+
+decision.operation   # => "open" / "close" / "hold"
+decision.direction   # => "long" / "short"
+decision.confidence  # => 0.78
+decision.leverage    # => 5
+decision.stop_loss   # => 95000
+decision.take_profit # => 105000
+decision.actionable? # => true (confidence >= 0.6, not hold)
+
+# All assets at once
+decisions = agent.decide_all(macro_strategy: MacroStrategy.active)
+# => [TradingDecision(BTC), TradingDecision(ETH), TradingDecision(SOL), TradingDecision(BNB)]
+```
+
+**LLM Output Schema:**
+```json
+{
+  "operation": "open",
+  "symbol": "BTC",
+  "direction": "long",
+  "leverage": 5,
+  "target_position": 0.02,
+  "stop_loss": 95000,
+  "take_profit": 105000,
+  "confidence": 0.78,
+  "reasoning": "RSI neutral at 62, MACD bullish crossover, price above all EMAs"
+}
+```
+
 ---
 
 ## Development Status
@@ -266,13 +326,13 @@ MarketSnapshot.prices_for("BTC", limit: 150)  # For indicator calculation
 - [x] MarketSnapshot model with JSONB indicators
 - [x] MarketSnapshotJob (runs every minute)
 
-### Phase 3: Reasoning Engine 🚧
-- [ ] MacroStrategy model
-- [ ] TradingDecision model
-- [ ] Context assembler
-- [ ] High-level agent (macro strategy)
-- [ ] Low-level agent (trade execution)
-- [ ] Decision parser with JSON validation
+### Phase 3: Reasoning Engine ✅
+- [x] MacroStrategy model (bias, risk tolerance, key levels)
+- [x] TradingDecision model (operation, direction, confidence)
+- [x] ContextAssembler (market data, indicators, sentiment)
+- [x] HighLevelAgent (daily macro strategy via Claude Sonnet)
+- [x] LowLevelAgent (5-min trade decisions via Claude Sonnet)
+- [x] DecisionParser with dry-validation JSON schemas
 
 ### Phase 4: Hyperliquid Integration
 - [ ] Read operations (via forked gem)

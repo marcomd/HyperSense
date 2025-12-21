@@ -40,6 +40,16 @@ macro:
   refresh_interval_hours: 24     # How often to refresh macro strategy
   lookback_days: 7               # Days of data for macro analysis
 
+# LLM Configuration
+llm:
+  model: claude-sonnet-4-20250514  # Claude model for reasoning agents
+  high_level:
+    max_tokens: 2000
+    temperature: 0.3
+  low_level:
+    max_tokens: 1500
+    temperature: 0.2
+
 # API Rate Limits (requests per minute)
 rate_limits:
   binance: 1200

@@ -1,0 +1,248 @@
+# frozen_string_literal: true
+
+module Reasoning
+  # Low-level trade execution agent using Claude AI
+  #
+  # Runs every 5 minutes to analyze current market conditions
+  # and make specific trading decisions.
+  #
+  class LowLevelAgent
+    def self.model = Settings.llm.model
+    def self.max_tokens = Settings.llm.low_level.max_tokens
+    def self.temperature = Settings.llm.low_level.temperature
+
+    SYSTEM_PROMPT = <<~PROMPT
+      You are a cryptocurrency trade execution specialist for an autonomous trading system.
+      Your role is to make specific trading decisions based on current market conditions.
+
+      IMPORTANT: You must respond ONLY with valid JSON. No explanations outside the JSON.
+
+      Decision framework:
+      1. Analyze current price vs technical indicators
+      2. Consider macro strategy bias and risk tolerance
+      3. Evaluate entry/exit opportunities
+      4. Set appropriate stop-loss and take-profit levels
+
+      Output JSON schema for OPEN action:
+      {
+        "operation": "open",
+        "symbol": "BTC" | "ETH" | "SOL" | "BNB",
+        "direction": "long" | "short",
+        "leverage": integer (1-10),
+        "target_position": number (0.01 to 0.05),
+        "stop_loss": number (price level),
+        "take_profit": number (price level),
+        "confidence": number (0.6 to 1.0),
+        "reasoning": "string - concise explanation"
+      }
+
+      Output JSON schema for HOLD action:
+      {
+        "operation": "hold",
+        "symbol": "BTC" | "ETH" | "SOL" | "BNB",
+        "confidence": number (0.0 to 1.0),
+        "reasoning": "string - explanation for not trading"
+      }
+
+      Rules:
+      - ONLY suggest "open" if you see a clear opportunity aligned with macro bias
+      - "hold" is the default when conditions are unclear or no edge exists
+      - Confidence < 0.6 should result in "hold"
+      - Stop-loss is REQUIRED for any "open" operation
+      - Respect max leverage from risk parameters
+      - Consider risk/reward ratio (aim for at least 2:1)
+    PROMPT
+
+    def initialize
+      @client = Anthropic::Client.new(
+        api_key: Rails.application.credentials.dig(:anthropic, :api_key)
+      )
+      @logger = Rails.logger
+    end
+
+    # Make trading decision for a specific symbol
+    # @param symbol [String] Asset symbol (BTC, ETH, etc.)
+    # @param macro_strategy [MacroStrategy, nil] Current macro strategy
+    # @return [TradingDecision] Created trading decision record
+    def decide(symbol:, macro_strategy: nil)
+      @logger.info "[LowLevelAgent] Analyzing #{symbol}..."
+
+      context_assembler = ContextAssembler.new(symbol: symbol)
+      context = context_assembler.for_trading(macro_strategy: macro_strategy)
+      user_prompt = build_user_prompt(context)
+
+      response = call_llm(user_prompt)
+      parsed = DecisionParser.parse_trading_decision(response)
+
+      create_decision(symbol, parsed, context, response, macro_strategy)
+    rescue Anthropic::RateLimitError => e
+      @logger.warn "[LowLevelAgent] Rate limited for #{symbol}: #{e.message}"
+      create_error_decision(symbol, "Rate limited - holding", macro_strategy)
+    rescue Anthropic::Errors::APIError, Faraday::Error => e
+      @logger.error "[LowLevelAgent] API error for #{symbol}: #{e.message}"
+      create_error_decision(symbol, e.message, macro_strategy)
+    rescue StandardError => e
+      @logger.error "[LowLevelAgent] Error for #{symbol}: #{e.message}"
+      create_error_decision(symbol, e.message, macro_strategy)
+    end
+
+    # Analyze all configured assets
+    # @param macro_strategy [MacroStrategy, nil] Current macro strategy
+    # @return [Array<TradingDecision>] Array of decisions for each asset
+    def decide_all(macro_strategy: nil)
+      Settings.assets.to_a.map do |symbol|
+        decide(symbol: symbol, macro_strategy: macro_strategy)
+      end
+    end
+
+    private
+
+    def build_user_prompt(context)
+      <<~PROMPT
+        Make a trading decision for #{context[:symbol]} based on the following data:
+
+        ## Current Time
+        #{context[:timestamp]}
+
+        ## Market Data
+        - Current Price: $#{context.dig(:market_data, :price)}
+        - 24h High: $#{context.dig(:market_data, :high_24h)}
+        - 24h Low: $#{context.dig(:market_data, :low_24h)}
+        - 24h Change: #{context.dig(:market_data, :price_change_pct_24h)}%
+
+        ## Technical Indicators
+        - EMA-20: $#{format_number(context.dig(:technical_indicators, :ema_20))}
+        - EMA-50: $#{format_number(context.dig(:technical_indicators, :ema_50))}
+        - RSI(14): #{format_number(context.dig(:technical_indicators, :rsi_14))}
+        - MACD: #{format_macd(context.dig(:technical_indicators, :macd))}
+        - Pivot Points: #{format_pivots(context.dig(:technical_indicators, :pivot_points))}
+
+        ## Signals
+        - RSI Signal: #{context.dig(:technical_indicators, :signals, :rsi)}
+        - MACD Signal: #{context.dig(:technical_indicators, :signals, :macd)}
+        - Above EMA-20: #{context.dig(:technical_indicators, :signals, :above_ema_20)}
+        - Above EMA-50: #{context.dig(:technical_indicators, :signals, :above_ema_50)}
+
+        ## Sentiment
+        - Fear & Greed: #{context.dig(:sentiment, :fear_greed_value)} (#{context.dig(:sentiment, :fear_greed_classification)})
+
+        ## Macro Strategy
+        #{format_macro_context(context[:macro_context])}
+
+        ## Recent Price Action
+        - Trend: #{context.dig(:recent_price_action, :trend)}
+        - 24h Range: $#{context.dig(:recent_price_action, :low)} - $#{context.dig(:recent_price_action, :high)}
+
+        ## Risk Parameters
+        - Max Position: #{(context.dig(:risk_parameters, :max_position_size) || 0.05) * 100}% of capital
+        - Max Leverage: #{context.dig(:risk_parameters, :max_leverage) || 10}x
+        - Min Confidence: #{(context.dig(:risk_parameters, :min_confidence) || 0.6) * 100}%
+
+        Provide your trading decision in JSON format.
+      PROMPT
+    end
+
+    def format_number(value)
+      return "N/A" unless value
+
+      value.respond_to?(:round) ? value.round(2) : value
+    end
+
+    def format_macd(macd)
+      return "N/A" unless macd
+
+      line = macd["macd"] || macd[:macd]
+      signal = macd["signal"] || macd[:signal]
+      histogram = macd["histogram"] || macd[:histogram]
+
+      "Line: #{format_number(line)}, Signal: #{format_number(signal)}, Histogram: #{format_number(histogram)}"
+    end
+
+    def format_pivots(pivots)
+      return "N/A" unless pivots
+
+      pp = pivots["pp"] || pivots[:pp]
+      r1 = pivots["r1"] || pivots[:r1]
+      s1 = pivots["s1"] || pivots[:s1]
+
+      "PP: $#{format_number(pp)}, R1: $#{format_number(r1)}, S1: $#{format_number(s1)}"
+    end
+
+    def format_macro_context(context)
+      return "Not available - using default neutral stance" unless context[:available]
+
+      <<~MACRO
+        - Bias: #{context[:bias]&.upcase}
+        - Risk Tolerance: #{((context[:risk_tolerance] || 0.5) * 100).round}%
+        - Narrative: #{context[:market_narrative]}
+      MACRO
+    end
+
+    def call_llm(user_prompt)
+      @logger.info "[LowLevelAgent] Calling Claude API..."
+
+      response = @client.messages.create(
+        model: self.class.model,
+        max_tokens: self.class.max_tokens,
+        temperature: self.class.temperature,
+        system: SYSTEM_PROMPT,
+        messages: [ { role: "user", content: user_prompt } ]
+      )
+
+      content = response.content.first
+      raise "Empty response from LLM" unless content&.text
+
+      @logger.info "[LowLevelAgent] Received response"
+      content.text
+    end
+
+    def create_decision(symbol, parsed, context, raw_response, macro_strategy)
+      if parsed[:valid]
+        data = parsed[:data]
+        TradingDecision.create!(
+          macro_strategy: macro_strategy,
+          symbol: symbol,
+          context_sent: context,
+          llm_response: { "raw" => raw_response, "parsed" => data },
+          parsed_decision: stringify_keys(data),
+          operation: data[:operation],
+          direction: data[:direction],
+          confidence: data[:confidence],
+          status: "pending"
+        )
+      else
+        @logger.warn "[LowLevelAgent] Invalid response for #{symbol}: #{parsed[:errors].join(', ')}"
+        TradingDecision.create!(
+          macro_strategy: macro_strategy,
+          symbol: symbol,
+          context_sent: context,
+          llm_response: { "raw" => raw_response, "errors" => parsed[:errors] },
+          parsed_decision: { "operation" => "hold", "reasoning" => "Invalid LLM response" },
+          operation: "hold",
+          confidence: 0.0,
+          status: "rejected",
+          rejection_reason: "Invalid LLM response: #{parsed[:errors].join(', ')}"
+        )
+      end
+    end
+
+    def create_error_decision(symbol, error_message, macro_strategy)
+      TradingDecision.create!(
+        macro_strategy: macro_strategy,
+        symbol: symbol,
+        context_sent: {},
+        llm_response: { "error" => error_message },
+        parsed_decision: { "operation" => "hold", "reasoning" => "Error during analysis" },
+        operation: "hold",
+        confidence: 0.0,
+        status: "rejected",
+        rejection_reason: error_message
+      )
+    end
+
+    # Convert symbol keys to string keys for JSONB storage
+    def stringify_keys(hash)
+      hash.transform_keys(&:to_s)
+    end
+  end
+end

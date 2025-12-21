@@ -16,6 +16,6 @@ class CreateMarketSnapshots < ActiveRecord::Migration[8.1]
 
     add_index :market_snapshots, :symbol
     add_index :market_snapshots, :captured_at
-    add_index :market_snapshots, [:symbol, :captured_at], unique: true
+    add_index :market_snapshots, [ :symbol, :captured_at ], unique: true
   end
 end

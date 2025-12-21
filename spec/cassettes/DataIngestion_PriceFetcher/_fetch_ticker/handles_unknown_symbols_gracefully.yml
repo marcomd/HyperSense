@@ -1,0 +1,69 @@
+---
+http_interactions:
+- request:
+    method: get
+    uri: https://api.binance.com/api/v3/ticker/24hr?symbol=UNKNOWNUSDT
+    body:
+      encoding: US-ASCII
+      string: ''
+    headers:
+      User-Agent:
+      - Faraday v2.14.0
+      Accept-Encoding:
+      - gzip;q=1.0,deflate;q=0.6,identity;q=0.3
+      Accept:
+      - "*/*"
+  response:
+    status:
+      code: 400
+      message: Bad Request
+    headers:
+      Content-Type:
+      - application/json;charset=UTF-8
+      Content-Length:
+      - '38'
+      Connection:
+      - keep-alive
+      Date:
+      - Sun, 21 Dec 2025 21:47:27 GMT
+      Expires:
+      - '0'
+      Server:
+      - nginx
+      X-Mbx-Uuid:
+      - c0193ea5-5452-45f9-b7e3-d949aa0a3d87
+      X-Mbx-Used-Weight:
+      - '4'
+      X-Mbx-Used-Weight-1m:
+      - '4'
+      Strict-Transport-Security:
+      - max-age=31536000; includeSubdomains
+      X-Frame-Options:
+      - SAMEORIGIN
+      X-Xss-Protection:
+      - 1; mode=block
+      X-Content-Type-Options:
+      - nosniff
+      Content-Security-Policy:
+      - default-src 'self'
+      X-Content-Security-Policy:
+      - default-src 'self'
+      X-Webkit-Csp:
+      - default-src 'self'
+      Cache-Control:
+      - no-cache, no-store, must-revalidate
+      Pragma:
+      - no-cache
+      X-Cache:
+      - Error from cloudfront
+      Via:
+      - 1.1 2a2bdf42ca54ab3438b29314adf5b166.cloudfront.net (CloudFront)
+      X-Amz-Cf-Pop:
+      - MXP53-P8
+      X-Amz-Cf-Id:
+      - MqwK_zQX2t96DcZ3SOmcuyNWDYSWSMq6utaAAxOkmSpMSxKDQmDi1g==
+    body:
+      encoding: UTF-8
+      string: '{"code":-1121,"msg":"Invalid symbol."}'
+  recorded_at: Sun, 21 Dec 2025 21:47:27 GMT
+recorded_with: VCR 6.3.1
