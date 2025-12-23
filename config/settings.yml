@@ -40,6 +40,10 @@ macro:
   refresh_interval_hours: 24     # How often to refresh macro strategy
   lookback_days: 7               # Days of data for macro analysis
 
+# Anthropic API Configuration
+anthropic:
+  api_key: <%= ENV.fetch('ANTHROPIC_API_KEY', '') %>
+
 # LLM Configuration
 llm:
   model: <%= ENV.fetch('LLM_MODEL', 'claude-sonnet-4-20250514') %>  # Claude model for reasoning agents

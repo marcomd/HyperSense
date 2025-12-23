@@ -49,7 +49,7 @@ module Reasoning
 
     def initialize
       @client = Anthropic::Client.new(
-        api_key: Rails.application.credentials.dig(:anthropic, :api_key)
+        api_key: Settings.anthropic.api_key
       )
       @logger = Rails.logger
       @context_assembler = ContextAssembler.new

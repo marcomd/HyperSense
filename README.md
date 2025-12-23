@@ -1,6 +1,8 @@
 # HyperSense
 
-**Version 0.5.0** | Autonomous AI Trading Agent for cryptocurrency markets.
+**Version 0.5.1** | Autonomous AI Trading Agent for cryptocurrency markets.
+
+![HyperSense_cover1.jpg](docs/HyperSense_cover1.jpg)
 
 ## Overview
 
@@ -157,17 +159,17 @@ HyperSense/
    rails db:create db:migrate
    ```
 
-6. **Configure API keys**
+6. **Configure API keys** (edit `.env` file created in step 3)
    ```bash
-   EDITOR="code --wait" rails credentials:edit
-   ```
-   Add:
-   ```yaml
-   anthropic:
-     api_key: your_anthropic_api_key
-   hyperliquid:
-     private_key: your_wallet_private_key
-     address: your_wallet_address
+   # Required: Anthropic API key for AI reasoning
+   ANTHROPIC_API_KEY=your_anthropic_api_key
+
+   # Required: Hyperliquid credentials for trading
+   HYPERLIQUID_PRIVATE_KEY=your_wallet_private_key
+   HYPERLIQUID_ADDRESS=your_wallet_address
+
+   # Optional: Override default LLM model
+   LLM_MODEL=claude-sonnet-4-20250514
    ```
 
 7. **Test data pipeline**

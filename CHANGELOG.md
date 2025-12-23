@@ -2,6 +2,13 @@
 
 All notable changes to HyperSense.
 
+## [0.5.1] - 2024-12-23
+
+### Changed
+- Move Anthropic API setting from rails credentials to settings.yml
+  - config/settings.yml reads them via ERB: <%= ENV.fetch('ANTHROPIC_API_KEY', '') %>
+  - Code accesses via Settings.anthropic.api_key
+
 ## [0.5.0] - 2024-12-23
 
 ### Added
