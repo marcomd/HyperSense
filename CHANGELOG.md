@@ -2,6 +2,16 @@
 
 All notable changes to HyperSense.
 
+## [0.4.0] - 2024-12-23
+
+### Added
+- `dotenv-rails` gem for environment variable management
+- `.env.example` template file for required environment variables
+
+### Changed
+- LLM model configuration (`LLM_MODEL`) now loaded from `.env` file via `settings.yml` ERB
+- Updated setup instructions in README.md to include environment variable configuration
+
 ## [0.3.0] - 2024-12-21
 
 ### Added

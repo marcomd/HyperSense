@@ -133,18 +133,24 @@ HyperSense/
    bundle install
    ```
 
-3. **Start PostgreSQL** (uses port 5433 to avoid conflicts)
+3. **Configure environment variables**
+   ```bash
+   cp .env.example .env
+   # Edit .env to customize LLM_MODEL and add Hyperliquid credentials
+   ```
+
+4. **Start PostgreSQL** (uses port 5433 to avoid conflicts)
    ```bash
    docker compose up -d
    ```
 
-4. **Setup database**
+5. **Setup database**
    ```bash
    cd backend
    rails db:create db:migrate
    ```
 
-5. **Configure API keys**
+6. **Configure API keys**
    ```bash
    EDITOR="code --wait" rails credentials:edit
    ```
@@ -157,17 +163,17 @@ HyperSense/
      address: your_wallet_address
    ```
 
-6. **Test data pipeline**
+7. **Test data pipeline**
    ```bash
    rails runner "MarketSnapshotJob.perform_now"
    ```
 
-7. **Run the server**
+8. **Run the server**
    ```bash
    bin/dev
    ```
 
-8. **Start background jobs**
+9. **Start background jobs**
    ```bash
    bin/jobs
    ```

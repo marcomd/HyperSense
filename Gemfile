@@ -6,6 +6,10 @@ gem "rails", "~> 8.1.1"
 gem "pg", "~> 1.1"
 # Use the Puma web server [https://github.com/puma/puma]
 gem "puma", ">= 5.0"
+
+# Load environment variables from .env (must be loaded early)
+gem "dotenv-rails", groups: [ :development, :test ]
+
 # Build JSON APIs with ease [https://github.com/rails/jbuilder]
 # gem "jbuilder"
 

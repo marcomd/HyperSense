@@ -42,7 +42,7 @@ macro:
 
 # LLM Configuration
 llm:
-  model: claude-sonnet-4-20250514  # Claude model for reasoning agents
+  model: <%= ENV.fetch('LLM_MODEL', 'claude-sonnet-4-20250514') %>  # Claude model for reasoning agents
   high_level:
     max_tokens: 2000
     temperature: 0.3
