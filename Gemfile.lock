@@ -1,8 +1,10 @@
 GIT
   remote: https://github.com/marcomd/hyperliquid.git
-  revision: de348c5971d838eefb3705247b1de84023a04285
+  revision: 231513d86d898d8be2b67cb69c575fa754c0fbeb
+  branch: feature/add-eip-712-signing-and-exchange-operations
   specs:
-    hyperliquid (0.3.0)
+    hyperliquid (0.4.0)
+      eth (~> 0.5)
       faraday (~> 2.0)
       faraday-retry (~> 2.0)
 

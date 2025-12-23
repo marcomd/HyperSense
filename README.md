@@ -1,6 +1,6 @@
 # HyperSense
 
-**Version 0.3.0** | Autonomous AI Trading Agent for cryptocurrency markets.
+**Version 0.5.0** | Autonomous AI Trading Agent for cryptocurrency markets.
 
 ## Overview
 
@@ -84,7 +84,10 @@ HyperSense/
 │   │   ├── models/
 │   │   │   ├── market_snapshot.rb   # Time-series market data
 │   │   │   ├── macro_strategy.rb    # Daily macro analysis
-│   │   │   └── trading_decision.rb  # Per-asset trade decisions
+│   │   │   ├── trading_decision.rb  # Per-asset trade decisions
+│   │   │   ├── position.rb          # Open/closed positions
+│   │   │   ├── order.rb             # Exchange orders
+│   │   │   └── execution_log.rb     # Audit trail
 │   │   └── services/
 │   │       ├── data_ingestion/
 │   │       │   ├── price_fetcher.rb      # Binance API
@@ -96,7 +99,11 @@ HyperSense/
 │   │       │   ├── decision_parser.rb    # JSON validation (dry-validation)
 │   │       │   ├── high_level_agent.rb   # Macro strategy (daily)
 │   │       │   └── low_level_agent.rb    # Trade decisions (5 min)
-│   │       ├── execution/           # TODO: Phase 4
+│   │       ├── execution/
+│   │       │   ├── hyperliquid_client.rb # Exchange API wrapper
+│   │       │   ├── account_manager.rb    # Account state
+│   │       │   ├── position_manager.rb   # Position tracking
+│   │       │   └── order_executor.rb     # Order execution
 │   │       └── risk/                # TODO: Phase 5
 │   │       └── trading_cycle.rb     # Main orchestrator
 │   ├── config/
@@ -314,6 +321,57 @@ decisions = agent.decide_all(macro_strategy: MacroStrategy.active)
 }
 ```
 
+### Execution Layer (Paper Trading)
+
+The execution layer is implemented with paper trading support. Real order placement requires enhancing the hyperliquid gem with write operations.
+
+**Position Model:**
+```ruby
+# Track open positions
+position = Position.open.find_by(symbol: "BTC")
+position.direction       # => "long"
+position.size           # => 0.1
+position.entry_price    # => 100000
+position.pnl_percent    # => 5.0 (%)
+position.unrealized_pnl # => 500.0 (USD)
+```
+
+**Order Execution (Paper Trading):**
+```ruby
+# Execute a trading decision
+executor = Execution::OrderExecutor.new
+order = executor.execute(decision)
+
+order.status           # => "filled" (simulated)
+order.filled_size      # => 0.1
+order.average_fill_price # => 100050
+```
+
+**Account Management:**
+```ruby
+manager = Execution::AccountManager.new
+
+# Fetch account state from Hyperliquid
+state = manager.fetch_account_state
+state[:account_value]    # => 10000.0
+state[:available_margin] # => 8000.0
+
+# Check if can trade
+manager.can_trade?(margin_required: 1000) # => true/false
+```
+
+**Position Sync from Hyperliquid:**
+```ruby
+pm = Execution::PositionManager.new
+
+# Sync positions from exchange
+pm.sync_from_hyperliquid
+# => { created: 2, updated: 0, closed: 0 }
+
+# Update prices
+pm.update_prices
+```
+
 ---
 
 ## Development Status
@@ -340,11 +398,14 @@ decisions = agent.decide_all(macro_strategy: MacroStrategy.active)
 - [x] LowLevelAgent (5-min trade decisions via Claude Sonnet)
 - [x] DecisionParser with dry-validation JSON schemas
 
-### Phase 4: Hyperliquid Integration
-- [ ] Read operations (via forked gem)
-- [ ] Write operations (orders, leverage)
-- [ ] EIP-712 signing
-- [ ] Position model
+### Phase 4: Hyperliquid Integration ✅
+- [x] Position, Order, ExecutionLog models
+- [x] HyperliquidClient (read operations via forked gem)
+- [x] AccountManager (account state, margin calculations)
+- [x] PositionManager (position sync, tracking)
+- [x] OrderExecutor (paper trading mode)
+- [x] TradingCycle integration
+- [ ] Write operations (requires gem enhancement - see `docs/HYPERLIQUID_GEM_WRITE_OPERATIONS_SPEC.md`)
 
 ### Phase 5: Risk Management
 - [ ] Position sizing

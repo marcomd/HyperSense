@@ -46,7 +46,7 @@ gem "config"                 # Settings management (config/settings.yml)
 gem "dry-validation"         # Input validation
 
 # Hyperliquid DEX client (forked for write operations)
-gem "hyperliquid", github: "marcomd/hyperliquid"
+gem "hyperliquid", github: "marcomd/hyperliquid", branch: "feature/add-eip-712-signing-and-exchange-operations"
 
 # Solid Queue Web UI (disabled for API-only mode - enable when adding admin UI)
 # gem "mission_control-jobs"

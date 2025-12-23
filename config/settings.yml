@@ -50,6 +50,14 @@ llm:
     max_tokens: 1500
     temperature: 0.2
 
+# Hyperliquid Exchange Configuration
+hyperliquid:
+  testnet: true                    # Use testnet by default (safer for development)
+  mainnet_url: "https://api.hyperliquid.xyz"
+  testnet_url: "https://api.hyperliquid-testnet.xyz"
+  retry_attempts: 3                # Number of retry attempts for failed requests
+  timeout: 30                      # Request timeout in seconds
+
 # API Rate Limits (requests per minute)
 rate_limits:
   binance: 1200

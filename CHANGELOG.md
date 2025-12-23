@@ -2,6 +2,39 @@
 
 All notable changes to HyperSense.
 
+## [0.5.0] - 2024-12-23
+
+### Added
+- **Hyperliquid Integration** (Phase 4 complete)
+  - `Position` model - Tracks open/closed positions with PnL calculations
+  - `Order` model - Exchange orders with full lifecycle (pending → submitted → filled/cancelled/failed)
+  - `ExecutionLog` model - Audit trail for all execution operations
+  - `Execution::HyperliquidClient` - Exchange API wrapper with read operations
+  - `Execution::AccountManager` - Account state, margin calculations, trading eligibility
+  - `Execution::PositionManager` - Position sync from Hyperliquid, price updates
+  - `Execution::OrderExecutor` - Order execution with paper trading simulation
+  - Paper trading mode enabled by default (`Settings.trading.paper_trading: true`)
+  - Hyperliquid gem branch with EIP-712 signing and exchange write operations
+
+### Changed
+- `TradingCycle` now integrates full execution pipeline:
+  - Syncs positions from Hyperliquid on each cycle
+  - Filters and approves decisions based on confidence and position limits
+  - Executes approved trades (paper or live mode)
+- Updated `config/settings.yml` with Hyperliquid configuration (testnet/mainnet URLs, timeouts)
+- Hyperliquid gem now uses `feature/add-eip-712-signing-and-exchange-operations` branch
+
+### Technical Details
+- 3 new database migrations (positions, orders, execution_logs)
+- 4 new execution services with full test coverage
+- Position tracking with unrealized PnL, liquidation price, margin used
+- Order lifecycle management with Hyperliquid order ID tracking
+- `ActiveSupport::Testing::TimeHelpers` added to RSpec for `freeze_time` support
+
+### Documentation
+- `docs/HYPERLIQUID_GEM_WRITE_OPERATIONS_SPEC.md` - Detailed spec for gem write operations
+- Updated README.md with execution layer usage examples
+
 ## [0.4.0] - 2024-12-23
 
 ### Added
