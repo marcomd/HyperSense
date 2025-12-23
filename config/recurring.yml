@@ -22,6 +22,12 @@ default: &default
     queue: data
     schedule: every minute
 
+  # Risk monitoring - enforces SL/TP and monitors circuit breaker
+  risk_monitoring:
+    class: RiskMonitoringJob
+    queue: risk
+    schedule: every minute
+
 development:
   <<: *default
 

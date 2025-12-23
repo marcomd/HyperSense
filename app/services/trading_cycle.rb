@@ -3,11 +3,12 @@
 # Main orchestrator for the trading cycle
 #
 # Coordinates the entire trading workflow:
-# 1. Sync positions from Hyperliquid
-# 2. Check/refresh macro strategy
-# 3. Run low-level agent for all assets
-# 4. Filter and approve decisions
-# 5. Execute approved trades
+# 1. Check circuit breaker (halt if triggered)
+# 2. Sync positions from Hyperliquid
+# 3. Check/refresh macro strategy
+# 4. Run low-level agent for all assets
+# 5. Filter and approve decisions (using RiskManager)
+# 6. Execute approved trades
 #
 class TradingCycle
   def initialize
@@ -15,12 +16,21 @@ class TradingCycle
     @position_manager = Execution::PositionManager.new
     @account_manager = Execution::AccountManager.new
     @order_executor = Execution::OrderExecutor.new
+    @risk_manager = Risk::RiskManager.new
+    @position_sizer = Risk::PositionSizer.new
+    @circuit_breaker = Risk::CircuitBreaker.new
   end
 
   # Execute the full trading cycle
   # @return [Array<TradingDecision>] Array of decisions made
   def execute
     @logger.info "[TradingCycle] Starting execution..."
+
+    # Step 0: Check circuit breaker
+    unless @circuit_breaker.trading_allowed?
+      @logger.warn "[TradingCycle] Circuit breaker active: #{@circuit_breaker.trigger_reason}"
+      return []
+    end
 
     # Step 1: Sync positions from Hyperliquid (if configured)
     sync_positions_if_configured
@@ -94,7 +104,8 @@ class TradingCycle
     @logger.info "[TradingCycle] Summary: #{actionable.size} actionable, #{holds.size} holds out of #{decisions.size} total"
   end
 
-  # Filter decisions through basic risk checks and approve valid ones
+  # Filter decisions through risk checks and approve valid ones
+  # Uses Risk::RiskManager for centralized validation
   # @param decisions [Array<TradingDecision>] Decisions to filter
   # @return [Array<TradingDecision>] Approved decisions
   def filter_and_approve(decisions)
@@ -102,31 +113,26 @@ class TradingCycle
       next false unless decision.actionable?
       next false unless decision.status == "pending"
 
-      # Check confidence threshold
-      min_confidence = Settings.risk.min_confidence
-      if decision.confidence && decision.confidence < min_confidence
-        decision.reject!("Confidence #{decision.confidence} below minimum #{min_confidence}")
+      # Get current price for validation
+      entry_price = fetch_current_price(decision.symbol)
+      unless entry_price
+        decision.reject!("Could not fetch price for #{decision.symbol}")
         next false
       end
 
-      # Check position limits for open operations
-      if decision.operation == "open"
-        if Position.open.count >= Settings.risk.max_open_positions
-          decision.reject!("Maximum open positions (#{Settings.risk.max_open_positions}) reached")
-          next false
-        end
-
-        if @position_manager.has_open_position?(decision.symbol)
-          decision.reject!("Already have open position for #{decision.symbol}")
-          next false
-        end
+      # Use RiskManager for centralized validation
+      result = @risk_manager.validate(decision, entry_price: entry_price)
+      unless result.approved?
+        decision.reject!(result.rejection_reason)
+        next false
       end
 
-      # Check for existing position for close operations
-      if decision.operation == "close"
-        unless @position_manager.has_open_position?(decision.symbol)
-          decision.reject!("No open position for #{decision.symbol}")
-          next false
+      # For open operations, calculate optimal position size
+      if decision.operation == "open" && decision.stop_loss
+        sizing = @position_sizer.optimal_size_for_decision(decision, entry_price: entry_price)
+        if sizing
+          @logger.info "[TradingCycle] Position sizing for #{decision.symbol}: #{sizing[:size]} " \
+                       "(risk: $#{sizing[:risk_amount]}#{sizing[:capped] ? ', capped' : ''})"
         end
       end
 
@@ -185,5 +191,17 @@ class TradingCycle
       open_count: Position.open.count,
       total_unrealized_pnl: Position.open.sum(:unrealized_pnl)
     }
+  end
+
+  # Fetch current price for a symbol
+  # @param symbol [String] Asset symbol
+  # @return [BigDecimal, nil] Current price or nil
+  def fetch_current_price(symbol)
+    client = Execution::HyperliquidClient.new
+    mids = client.all_mids
+    mids[symbol]&.to_d
+  rescue StandardError => e
+    @logger.warn "[TradingCycle] Failed to fetch price for #{symbol}: #{e.message}"
+    nil
   end
 end

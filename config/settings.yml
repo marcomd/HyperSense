@@ -22,6 +22,15 @@ risk:
   max_leverage: 10               # Maximum leverage allowed
   default_leverage: 3            # Default leverage for new positions
   max_open_positions: 5          # Maximum concurrent positions
+  # Position Sizing
+  max_risk_per_trade: 0.01       # 1% of capital at risk per trade
+  # Risk/Reward Validation
+  min_risk_reward_ratio: 2.0     # Minimum R/R ratio (2:1)
+  enforce_risk_reward_ratio: true # Reject trades below min R/R (false = warn only)
+  # Circuit Breaker
+  max_daily_loss: 0.05           # 5% max daily loss triggers circuit breaker
+  max_consecutive_losses: 3      # Consecutive losses before halt
+  circuit_breaker_cooldown: 24   # Hours to wait after circuit breaker trigger
 
 # Stop Loss / Take Profit Defaults (percentage)
 defaults:
@@ -46,7 +55,7 @@ anthropic:
 
 # LLM Configuration
 llm:
-  model: <%= ENV.fetch('LLM_MODEL', 'claude-sonnet-4-20250514') %>  # Claude model for reasoning agents
+  model: <%= ENV.fetch('LLM_MODEL', 'claude-sonnet-4-5') %>  # Claude model for reasoning agents
   high_level:
     max_tokens: 2000
     temperature: 0.3

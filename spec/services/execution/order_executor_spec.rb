@@ -14,6 +14,11 @@ RSpec.describe Execution::OrderExecutor do
     allow(Execution::PositionManager).to receive(:new).and_return(mock_position_manager)
     allow(mock_client).to receive(:configured?).and_return(true)
     allow(mock_client).to receive(:all_mids).and_return({ "BTC" => "100000" })
+    # Default stubs for validation
+    allow(mock_account_manager).to receive(:margin_for_position).and_return(1000)
+    allow(mock_account_manager).to receive(:can_trade?).and_return(true)
+    allow(mock_position_manager).to receive(:has_open_position?).and_return(false)
+    allow(mock_position_manager).to receive(:open_position).and_return(build(:position))
   end
 
   describe "#execute" do
@@ -53,13 +58,17 @@ RSpec.describe Execution::OrderExecutor do
         expect(result.filled_size).to eq(result.size)
       end
 
-      it "creates a simulated position" do
+      it "creates a simulated position with SL/TP" do
         expect(mock_position_manager).to receive(:open_position).with(
-          symbol: "BTC",
-          direction: "long",
-          size: 0.02,
-          entry_price: 100_000,
-          leverage: 5
+          hash_including(
+            symbol: "BTC",
+            direction: "long",
+            size: 0.02,
+            entry_price: 100_000,
+            leverage: 5,
+            stop_loss_price: 95_000,
+            take_profit_price: 110_000
+          )
         ).and_return(build(:position))
 
         executor.execute(decision)
@@ -84,6 +93,8 @@ RSpec.describe Execution::OrderExecutor do
     context "in live trading mode" do
       before do
         allow(Settings.trading).to receive(:paper_trading).and_return(false)
+        allow(mock_client).to receive(:place_order)
+          .and_raise(Execution::HyperliquidClient::WriteOperationNotImplemented.new("Write operations not implemented"))
       end
 
       it "raises WriteOperationNotImplemented" do
@@ -110,7 +121,7 @@ RSpec.describe Execution::OrderExecutor do
 
         expect(result).to be_nil
         expect(decision.reload.status).to eq("rejected")
-        expect(decision.rejection_reason).to include("confidence")
+        expect(decision.rejection_reason.downcase).to include("confidence")
       end
 
       it "rejects when existing position exists" do
@@ -148,6 +159,7 @@ RSpec.describe Execution::OrderExecutor do
       allow(Settings.trading).to receive(:paper_trading).and_return(true)
       allow(mock_position_manager).to receive(:get_open_position).and_return(position)
       allow(mock_position_manager).to receive(:close_position)
+      allow(mock_position_manager).to receive(:has_open_position?).with("BTC").and_return(true)
     end
 
     it "creates a sell order to close position" do
@@ -171,6 +183,7 @@ RSpec.describe Execution::OrderExecutor do
 
     context "when no open position exists" do
       before do
+        allow(mock_position_manager).to receive(:has_open_position?).with("BTC").and_return(false)
         allow(mock_position_manager).to receive(:get_open_position).and_return(nil)
       end
 
@@ -257,7 +270,7 @@ RSpec.describe Execution::OrderExecutor do
       result = executor.send(:validate_decision, decision)
 
       expect(result[:valid]).to be false
-      expect(result[:reason]).to include("confidence")
+      expect(result[:reason].downcase).to include("confidence")
     end
   end
 end

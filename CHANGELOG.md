@@ -2,6 +2,54 @@
 
 All notable changes to HyperSense.
 
+## [0.6.0] - 2024-12-23
+
+### Added
+- **Risk Management System** (Phase 5 complete)
+  - `Risk::RiskManager` - Centralized risk validation (confidence, leverage, margin, R/R ratio)
+  - `Risk::PositionSizer` - Risk-based position sizing using formula: `size = (account_value * max_risk_pct) / risk_per_unit`
+  - `Risk::StopLossManager` - SL/TP enforcement with market order execution on trigger
+  - `Risk::CircuitBreaker` - Trading halt on excessive losses (daily loss limit, consecutive losses, cooldown)
+  - `RiskMonitoringJob` - Background job (every minute) for SL/TP monitoring and circuit breaker updates
+  - Position risk fields: `stop_loss_price`, `take_profit_price`, `risk_amount`, `realized_pnl`, `close_reason`
+  - Position helper methods: `stop_loss_triggered?`, `take_profit_triggered?`, `risk_reward_ratio`, distance calculations
+
+### Changed
+- `TradingCycle` now integrates all risk services:
+  - Checks circuit breaker before allowing trades
+  - Uses `Risk::RiskManager.validate` for centralized decision validation
+  - Uses `Risk::PositionSizer` for optimal position sizing
+- `Execution::OrderExecutor` now passes SL/TP to positions and calculates risk amount
+- `Execution::PositionManager.open_position` accepts `stop_loss_price`, `take_profit_price`, `risk_amount`
+- `ExecutionLog` now supports `risk_trigger` action for SL/TP events
+- Updated `config/settings.yml` with new risk parameters
+- Updated `config/recurring.yml` with `risk_monitoring` job schedule
+
+### Fixed
+- `Execution::HyperliquidClient` updated to use new gem API (`Hyperliquid::SDK` with `sdk.info.*` methods)
+- Fixed hyperliquid_client_spec.rb to properly mock `Hyperliquid::SDK` and `Hyperliquid::Info`
+
+### Configuration
+New risk settings in `config/settings.yml`:
+```yaml
+risk:
+  max_risk_per_trade: 0.01         # 1% of capital per trade
+  min_risk_reward_ratio: 2.0       # Minimum R/R ratio (2:1)
+  enforce_risk_reward_ratio: true  # Reject below min R/R (false = warn only)
+  max_daily_loss: 0.05             # 5% max daily loss (circuit breaker)
+  max_consecutive_losses: 3        # Consecutive losses before halt
+  circuit_breaker_cooldown: 24     # Hours to wait after trigger
+```
+
+### Technical Details
+- 1 new database migration (add_risk_fields_to_positions)
+- 4 new risk services with full test coverage
+- 1 new background job (RiskMonitoringJob)
+- Circuit breaker uses `Rails.cache` for state persistence (can migrate to DB later)
+- SL/TP orders execute as market orders for guaranteed fills
+- Risk/reward validation configurable: enforce (reject) or warn-only mode
+- 417 total tests, all passing
+
 ## [0.5.1] - 2024-12-23
 
 ### Changed

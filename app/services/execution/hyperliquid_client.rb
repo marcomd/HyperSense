@@ -60,7 +60,7 @@ module Execution
     # @return [Hash] User state with positions and margin info
     def user_state(user_address)
       with_error_handling do
-        client.user_state(user_address)
+        info.user_state(user_address)
       end
     end
 
@@ -69,7 +69,7 @@ module Execution
     # @return [Array<Hash>] Open orders
     def open_orders(user_address)
       with_error_handling do
-        client.open_orders(user_address)
+        info.open_orders(user_address)
       end
     end
 
@@ -78,7 +78,7 @@ module Execution
     # @return [Array<Hash>] Recent fills
     def user_fills(user_address)
       with_error_handling do
-        client.user_fills(user_address)
+        info.user_fills(user_address)
       end
     end
 
@@ -86,7 +86,7 @@ module Execution
     # @return [Hash] Asset metadata including universe
     def meta
       with_error_handling do
-        client.meta
+        info.meta
       end
     end
 
@@ -94,7 +94,7 @@ module Execution
     # @return [Hash] Symbol => mid price mapping
     def all_mids
       with_error_handling do
-        client.all_mids
+        info.all_mids
       end
     end
 
@@ -103,7 +103,7 @@ module Execution
     # @return [Hash] L2 order book
     def l2_book(coin)
       with_error_handling do
-        client.l2_book(coin)
+        info.l2_book(coin)
       end
     end
 
@@ -115,7 +115,7 @@ module Execution
     # @return [Array<Hash>] Candle data
     def candles_snapshot(coin, interval, start_time, end_time)
       with_error_handling do
-        client.candles_snapshot(coin, interval, start_time, end_time)
+        info.candles_snapshot(coin, interval, start_time, end_time)
       end
     end
 
@@ -159,8 +159,12 @@ module Execution
 
     private
 
-    def client
-      @client ||= Hyperliquid::Client.new(testnet: testnet?)
+    def sdk
+      @sdk ||= Hyperliquid::SDK.new(testnet: testnet?)
+    end
+
+    def info
+      sdk.info
     end
 
     def private_key

@@ -5,6 +5,13 @@ require "rails_helper"
 RSpec.describe Execution::HyperliquidClient do
   let(:client) { described_class.new }
   let(:test_address) { "0x1234567890abcdef1234567890abcdef12345678" }
+  let(:mock_sdk) { instance_double(Hyperliquid::SDK) }
+  let(:mock_info) { instance_double(Hyperliquid::Info) }
+
+  before do
+    allow(Hyperliquid::SDK).to receive(:new).and_return(mock_sdk)
+    allow(mock_sdk).to receive(:info).and_return(mock_info)
+  end
 
   describe "#initialize" do
     it "creates a client with testnet configuration by default" do
@@ -56,9 +63,14 @@ RSpec.describe Execution::HyperliquidClient do
     end
   end
 
-  describe "read operations", :vcr do
+  describe "read operations" do
     describe "#user_state" do
       it "fetches account state from Hyperliquid" do
+        allow(mock_info).to receive(:user_state).with(test_address).and_return({
+          "assetPositions" => [],
+          "crossMarginSummary" => { "accountValue" => "10000" }
+        })
+
         result = client.user_state(test_address)
 
         expect(result).to be_a(Hash)
@@ -67,6 +79,8 @@ RSpec.describe Execution::HyperliquidClient do
       end
 
       it "handles invalid address gracefully" do
+        allow(mock_info).to receive(:user_state).with("invalid").and_return({})
+
         result = client.user_state("invalid")
 
         expect(result).to be_a(Hash)
@@ -75,6 +89,8 @@ RSpec.describe Execution::HyperliquidClient do
 
     describe "#open_orders" do
       it "fetches open orders for address" do
+        allow(mock_info).to receive(:open_orders).with(test_address).and_return([])
+
         result = client.open_orders(test_address)
 
         expect(result).to be_an(Array)
@@ -83,6 +99,8 @@ RSpec.describe Execution::HyperliquidClient do
 
     describe "#user_fills" do
       it "fetches recent fills for address" do
+        allow(mock_info).to receive(:user_fills).with(test_address).and_return([])
+
         result = client.user_fills(test_address)
 
         expect(result).to be_an(Array)
@@ -91,6 +109,10 @@ RSpec.describe Execution::HyperliquidClient do
 
     describe "#meta" do
       it "fetches asset metadata" do
+        allow(mock_info).to receive(:meta).and_return({
+          "universe" => [ { "name" => "BTC" } ]
+        })
+
         result = client.meta
 
         expect(result).to be_a(Hash)
@@ -100,6 +122,8 @@ RSpec.describe Execution::HyperliquidClient do
 
     describe "#all_mids" do
       it "fetches current mid prices" do
+        allow(mock_info).to receive(:all_mids).and_return({ "BTC" => "100000" })
+
         result = client.all_mids
 
         expect(result).to be_a(Hash)
@@ -144,7 +168,7 @@ RSpec.describe Execution::HyperliquidClient do
 
   describe "error handling" do
     it "wraps API errors in HyperliquidApiError" do
-      allow_any_instance_of(Hyperliquid::Client).to receive(:user_state)
+      allow(mock_info).to receive(:user_state)
         .and_raise(Faraday::TimeoutError)
 
       expect { client.user_state(test_address) }

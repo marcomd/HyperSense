@@ -154,12 +154,26 @@ module Execution
 
       # Create/close position based on operation
       if decision.operation == "open"
+        # Calculate risk amount if SL provided
+        risk_amount = nil
+        if order_params[:stop_loss]
+          risk_amount = Risk::RiskManager.new.calculate_risk_amount(
+            size: order_params[:size],
+            entry_price: current_price,
+            stop_loss: order_params[:stop_loss],
+            direction: decision.direction
+          )
+        end
+
         position = @position_manager.open_position(
           symbol: order_params[:symbol],
           direction: decision.direction,
           size: order_params[:size],
           entry_price: current_price,
-          leverage: order_params[:leverage]
+          leverage: order_params[:leverage],
+          stop_loss_price: order_params[:stop_loss],
+          take_profit_price: order_params[:take_profit],
+          risk_amount: risk_amount
         )
         order.update!(position: position)
       elsif decision.operation == "close"

@@ -1,6 +1,6 @@
 # HyperSense
 
-**Version 0.5.1** | Autonomous AI Trading Agent for cryptocurrency markets.
+**Version 0.6.0** | Autonomous AI Trading Agent for cryptocurrency markets.
 
 ![HyperSense_cover1.jpg](docs/HyperSense_cover1.jpg)
 
@@ -21,7 +21,7 @@ HyperSense is an autonomous trading agent that operates in discrete cycles to an
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    ORCHESTRATOR                             │
-│              (TradingCycleJob - every 5 min)               │
+│              (TradingCycleJob - every 5 min)                │
 │                   Via Solid Queue                           │
 └─────────────────────────────────────────────────────────────┘
                               │
@@ -82,7 +82,8 @@ HyperSense/
 │   │   ├── jobs/                   # Solid Queue jobs
 │   │   │   ├── trading_cycle_job.rb
 │   │   │   ├── macro_strategy_job.rb
-│   │   │   └── market_snapshot_job.rb
+│   │   │   ├── market_snapshot_job.rb
+│   │   │   └── risk_monitoring_job.rb
 │   │   ├── models/
 │   │   │   ├── market_snapshot.rb   # Time-series market data
 │   │   │   ├── macro_strategy.rb    # Daily macro analysis
@@ -106,7 +107,11 @@ HyperSense/
 │   │       │   ├── account_manager.rb    # Account state
 │   │       │   ├── position_manager.rb   # Position tracking
 │   │       │   └── order_executor.rb     # Order execution
-│   │       └── risk/                # TODO: Phase 5
+│   │       ├── risk/
+│   │       │   ├── risk_manager.rb       # Centralized risk validation
+│   │       │   ├── position_sizer.rb     # Risk-based position sizing
+│   │       │   ├── stop_loss_manager.rb  # SL/TP enforcement
+│   │       │   └── circuit_breaker.rb    # Trading halt on losses
 │   │       └── trading_cycle.rb     # Main orchestrator
 │   ├── config/
 │   │   ├── settings.yml            # Trading parameters
@@ -169,7 +174,7 @@ HyperSense/
    HYPERLIQUID_ADDRESS=your_wallet_address
 
    # Optional: Override default LLM model
-   LLM_MODEL=claude-sonnet-4-20250514
+   LLM_MODEL=claude-sonnet-4-5
    ```
 
 7. **Test data pipeline**
@@ -323,6 +328,67 @@ decisions = agent.decide_all(macro_strategy: MacroStrategy.active)
 }
 ```
 
+### Risk Management (Working)
+
+**Risk Services:**
+```ruby
+# Centralized risk validation
+risk_manager = Risk::RiskManager.new
+result = risk_manager.validate(decision, entry_price: 100_000)
+result.approved?           # => true/false
+result.rejection_reason    # => "Confidence 0.5 below minimum 0.6"
+
+# Risk-based position sizing
+sizer = Risk::PositionSizer.new
+result = sizer.calculate(
+  entry_price: 100_000,
+  stop_loss: 95_000,
+  direction: "long"
+)
+result[:size]       # => 0.02 (BTC)
+result[:risk_amount] # => 100 ($)
+
+# Stop-loss/Take-profit monitoring
+sl_manager = Risk::StopLossManager.new
+results = sl_manager.check_all_positions
+# => { triggered: [...], checked: 5, skipped: 1 }
+
+# Circuit breaker
+breaker = Risk::CircuitBreaker.new
+breaker.trading_allowed?   # => true/false
+breaker.record_loss(500)   # Record losing trade
+breaker.record_win(200)    # Record winning trade (resets consecutive losses)
+breaker.status             # => { trading_allowed: true, daily_loss: 500, ... }
+```
+
+**Risk Configuration (`config/settings.yml`):**
+```yaml
+risk:
+  max_position_size: 0.05        # 5% of capital max
+  min_confidence: 0.6            # 60% confidence threshold
+  max_leverage: 10               # Max leverage allowed
+  default_leverage: 3            # Default leverage
+  max_open_positions: 5          # Max concurrent positions
+  max_risk_per_trade: 0.01       # 1% of capital at risk per trade
+  min_risk_reward_ratio: 2.0     # Minimum R/R ratio (2:1)
+  enforce_risk_reward_ratio: true # Reject below min R/R (false = warn only)
+  max_daily_loss: 0.05           # 5% max daily loss (circuit breaker)
+  max_consecutive_losses: 3      # Consecutive losses before halt
+  circuit_breaker_cooldown: 24   # Hours to wait after trigger
+```
+
+**Position with Risk Fields:**
+```ruby
+position = Position.open.find_by(symbol: "BTC")
+position.stop_loss_price      # => 95000
+position.take_profit_price    # => 110000
+position.risk_amount          # => 500 ($)
+position.stop_loss_triggered?(94_000)  # => true
+position.take_profit_triggered?        # => false
+position.risk_reward_ratio    # => 3.0
+position.stop_loss_distance_pct # => 5.0 (%)
+```
+
 ### Execution Layer (Paper Trading)
 
 The execution layer is implemented with paper trading support. Real order placement requires enhancing the hyperliquid gem with write operations.
@@ -409,11 +475,13 @@ pm.update_prices
 - [x] TradingCycle integration
 - [ ] Write operations (requires gem enhancement - see `docs/HYPERLIQUID_GEM_WRITE_OPERATIONS_SPEC.md`)
 
-### Phase 5: Risk Management
-- [ ] Position sizing
-- [ ] Stop-loss / Take-profit
-- [ ] Circuit breakers
-- [ ] Paper trading mode
+### Phase 5: Risk Management ✅
+- [x] Position sizing (risk-based, configurable max risk per trade)
+- [x] Stop-loss / Take-profit (stored in Position, enforced by RiskMonitoringJob)
+- [x] Circuit breakers (daily loss limits, consecutive loss limits, cooldown)
+- [x] Risk/reward validation (configurable enforcement)
+- [x] Centralized risk validation (Risk::RiskManager)
+- [x] Paper trading mode (already implemented in Phase 4)
 
 ### Phase 6: Dashboard
 - [ ] React frontend (Vite + TypeScript)

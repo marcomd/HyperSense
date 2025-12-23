@@ -92,8 +92,12 @@ module Execution
     # @param size [Numeric] Position size
     # @param entry_price [Numeric] Entry price
     # @param leverage [Integer] Leverage
+    # @param stop_loss_price [Numeric, nil] Stop-loss price
+    # @param take_profit_price [Numeric, nil] Take-profit price
+    # @param risk_amount [Numeric, nil] Dollar amount at risk
     # @return [Position]
-    def open_position(symbol:, direction:, size:, entry_price:, leverage: nil)
+    def open_position(symbol:, direction:, size:, entry_price:, leverage: nil,
+                      stop_loss_price: nil, take_profit_price: nil, risk_amount: nil)
       leverage ||= Settings.risk.default_leverage
       margin_used = (size * entry_price) / leverage
 
@@ -107,7 +111,10 @@ module Execution
         margin_used: margin_used,
         unrealized_pnl: 0,
         status: "open",
-        opened_at: Time.current
+        opened_at: Time.current,
+        stop_loss_price: stop_loss_price,
+        take_profit_price: take_profit_price,
+        risk_amount: risk_amount
       )
     end
 
@@ -154,6 +161,12 @@ module Execution
     # @return [ActiveRecord::Relation<Position>]
     def open_positions
       Position.open.recent
+    end
+
+    # Count of open positions
+    # @return [Integer]
+    def open_positions_count
+      Position.open.count
     end
 
     private

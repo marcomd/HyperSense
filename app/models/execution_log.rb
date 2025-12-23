@@ -23,7 +23,7 @@
 #  updated_at       :datetime         not null
 #
 class ExecutionLog < ApplicationRecord
-  VALID_ACTIONS = %w[place_order cancel_order modify_order sync_position sync_account].freeze
+  VALID_ACTIONS = %w[place_order cancel_order modify_order sync_position sync_account risk_trigger].freeze
   VALID_STATUSES = %w[success failure].freeze
 
   # Associations
