@@ -32,23 +32,31 @@ HyperSense is an autonomous trading agent that operates in discrete cycles to an
 │   (Macro Strategist)│                │   (Trade Executor)  │
 ├─────────────────────┤                ├─────────────────────┤
 │ Frequency: Daily    │                │ Frequency: 5 min    │
-│                     │                │                     │
-│ Inputs:             │                │ Inputs:             │
-│ - Weekly trends     │                │ - Current prices    │
-│ - Macro sentiment   │                │ - Live indicators   │
-│ - News/events       │                │ - Macro strategy    │
-│                     │                │                     │
-│ Outputs:            │                │ Outputs:            │
-│ - Market narrative  │                │ - Specific trades   │
-│ - Bias direction    │                │ - Entry/exit points │
-│ - Risk tolerance    │                │ - Position sizing   │
+│ (6am or on-demand)  │                │                     │
+│                     │                │ Inputs:             │
+│ Inputs:             │                │ - Current prices    │
+│ - Weekly trends     │                │ - Live indicators   │
+│ - Macro sentiment   │                │ - Macro strategy    │
+│ - News/events       │                │                     │
+│                     │                │ Outputs:            │
+│ Outputs:            │                │ - Specific trades   │
+│ - Market narrative  │                │ - Entry/exit points │
+│ - Bias direction    │                │ - Position sizing   │
+│ - Risk tolerance    │                │                     │
 └─────────────────────┘                └─────────────────────┘
                               │
                               ▼
               ┌──────────────────────────┐
+              │   RISK MANAGEMENT LAYER  │
+              │ RiskManager (validation) │
+              │ RiskMonitoringJob (1min) │
+              │ CircuitBreaker (halts)   │
+              └──────────────────────────┘
+                              │
+                              ▼
+              ┌──────────────────────────┐
               │   DATA INGESTION LAYER   │
-              │ PriceFetcher (Binance)   │
-              │ SentimentFetcher (F&G)   │
+              │ MarketSnapshotJob (1min) │
               │ Indicators::Calculator   │
               └──────────────────────────┘
                               │
@@ -57,6 +65,36 @@ HyperSense is an autonomous trading agent that operates in discrete cycles to an
               │   MarketSnapshot (PG)    │
               │   Solid Queue (no Redis) │
               └──────────────────────────┘
+```
+
+## Execution Flow
+
+### Job Schedule
+
+| Frequency | Job | Queue | Purpose |
+|-----------|-----|-------|---------|
+| Every minute | MarketSnapshotJob | data | Fetch prices, calculate indicators |
+| Every minute | RiskMonitoringJob | default | Monitor SL/TP, circuit breaker |
+| Every 5 minutes | TradingCycleJob | trading | Main trading orchestration |
+| Daily (6am) | MacroStrategyJob | analysis | High-level market analysis |
+
+### Trading Cycle (every 5 min)
+
+1. **Circuit breaker check** - halt if triggered
+2. **Position sync** - fetch positions from Hyperliquid
+3. **Macro strategy** - ensure valid (refresh if stale)
+4. **Low-level agent** - generate decisions for all assets
+5. **Risk validation** - filter through RiskManager
+6. **Trade execution** - execute approved trades
+
+### 24-Hour Timeline
+
+```
+6:00 AM  → MacroStrategyJob creates daily strategy (bullish/bearish/neutral)
+6:05 AM  → TradingCycleJob starts using macro strategy
+All day  → MarketSnapshotJob (1min) + RiskMonitoringJob (1min)
+All day  → TradingCycleJob (5min) makes decisions within macro bias
+~6:00 PM → Macro strategy becomes stale → TradingCycleJob triggers refresh
 ```
 
 ## Tech Stack
@@ -226,10 +264,12 @@ weights:
 
 ## Current Implementation
 
-### Data Pipeline (Working)
+### 1. Data Collection (MarketSnapshotJob - every minute)
+
+Fetches prices from Binance API, calculates technical indicators, and stores market snapshots.
 
 ```ruby
-# Fetch and store market data with indicators
+# Trigger manually
 MarketSnapshotJob.perform_now
 
 # Example output:
@@ -239,7 +279,23 @@ MarketSnapshotJob.perform_now
 # BNB: $700.0   | RSI: 60.1 | MACD: 0.68
 ```
 
-### Technical Indicators
+**MarketSnapshot Model:**
+```ruby
+# Get latest snapshot for BTC
+snapshot = MarketSnapshot.latest_for("BTC")
+snapshot.price           # => 97000.0
+snapshot.rsi_signal      # => :neutral / :oversold / :overbought
+snapshot.macd_signal     # => :bullish / :bearish
+snapshot.above_ema?(50)  # => true/false
+
+# Query historical data
+MarketSnapshot.for_symbol("ETH").last_hours(24)
+MarketSnapshot.prices_for("BTC", limit: 150)  # For indicator calculation
+```
+
+### 2. Technical Indicators
+
+Calculated during data collection by `Indicators::Calculator`:
 
 ```ruby
 calculator = Indicators::Calculator.new
@@ -259,24 +315,10 @@ calculator.macd(prices)      # { macd:, signal:, histogram: }
 calculator.pivot_points(high, low, close)  # { pp:, r1:, r2:, s1:, s2: }
 ```
 
-### MarketSnapshot Model
+### 3. Macro Strategy (MacroStrategyJob - daily at 6am)
 
-```ruby
-# Get latest snapshot for BTC
-snapshot = MarketSnapshot.latest_for("BTC")
-snapshot.price           # => 97000.0
-snapshot.rsi_signal      # => :neutral / :oversold / :overbought
-snapshot.macd_signal     # => :bullish / :bearish
-snapshot.above_ema?(50)  # => true/false
+High-level market analysis that sets the trading bias for the day.
 
-# Query historical data
-MarketSnapshot.for_symbol("ETH").last_hours(24)
-MarketSnapshot.prices_for("BTC", limit: 150)  # For indicator calculation
-```
-
-### Reasoning Engine (Working)
-
-**High-Level Agent (Macro Strategy):**
 ```ruby
 # Runs daily at 6am via MacroStrategyJob
 strategy = Reasoning::HighLevelAgent.new.analyze
@@ -292,7 +334,10 @@ MacroStrategy.active       # => Current valid strategy
 MacroStrategy.needs_refresh?  # => true if stale or missing
 ```
 
-**Low-Level Agent (Trade Decisions):**
+### 4. Trading Decisions (TradingCycleJob - every 5 min)
+
+Low-level agent generates trade decisions for each asset within the macro bias.
+
 ```ruby
 # Runs every 5 minutes via TradingCycleJob
 agent = Reasoning::LowLevelAgent.new
@@ -328,9 +373,10 @@ decisions = agent.decide_all(macro_strategy: MacroStrategy.active)
 }
 ```
 
-### Risk Management (Working)
+### 5. Risk Validation
 
-**Risk Services:**
+Decisions are validated before execution via `Risk::RiskManager`:
+
 ```ruby
 # Centralized risk validation
 risk_manager = Risk::RiskManager.new
@@ -347,18 +393,6 @@ result = sizer.calculate(
 )
 result[:size]       # => 0.02 (BTC)
 result[:risk_amount] # => 100 ($)
-
-# Stop-loss/Take-profit monitoring
-sl_manager = Risk::StopLossManager.new
-results = sl_manager.check_all_positions
-# => { triggered: [...], checked: 5, skipped: 1 }
-
-# Circuit breaker
-breaker = Risk::CircuitBreaker.new
-breaker.trading_allowed?   # => true/false
-breaker.record_loss(500)   # Record losing trade
-breaker.record_win(200)    # Record winning trade (resets consecutive losses)
-breaker.status             # => { trading_allowed: true, daily_loss: 500, ... }
 ```
 
 **Risk Configuration (`config/settings.yml`):**
@@ -377,8 +411,17 @@ risk:
   circuit_breaker_cooldown: 24   # Hours to wait after trigger
 ```
 
-**Position with Risk Fields:**
+### 6. Risk Monitoring (RiskMonitoringJob - every minute)
+
+Continuous monitoring of open positions for SL/TP triggers and circuit breaker status.
+
+**Stop-Loss / Take-Profit:**
 ```ruby
+sl_manager = Risk::StopLossManager.new
+results = sl_manager.check_all_positions
+# => { triggered: [...], checked: 5, skipped: 1 }
+
+# Position risk fields
 position = Position.open.find_by(symbol: "BTC")
 position.stop_loss_price      # => 95000
 position.take_profit_price    # => 110000
@@ -389,7 +432,16 @@ position.risk_reward_ratio    # => 3.0
 position.stop_loss_distance_pct # => 5.0 (%)
 ```
 
-### Execution Layer (Paper Trading)
+**Circuit Breaker:**
+```ruby
+breaker = Risk::CircuitBreaker.new
+breaker.trading_allowed?   # => true/false
+breaker.record_loss(500)   # Record losing trade
+breaker.record_win(200)    # Record winning trade (resets consecutive losses)
+breaker.status             # => { trading_allowed: true, daily_loss: 500, ... }
+```
+
+### 7. Execution Layer (Paper Trading)
 
 The execution layer is implemented with paper trading support. Real order placement requires enhancing the hyperliquid gem with write operations.
 
@@ -497,152 +549,18 @@ pm.update_prices
 
 ---
 
-## Implementation Plan (Phases 3-7)
+## Implementation Plan
 
-### Phase 3: Multi-Agent Reasoning Engine
+### Completed Phases
 
-**Files to create:**
-- `app/models/macro_strategy.rb`
-- `app/models/trading_decision.rb`
-- `app/services/reasoning/context_assembler.rb`
-- `app/services/reasoning/high_level_agent.rb`
-- `app/services/reasoning/low_level_agent.rb`
-- `app/services/reasoning/decision_parser.rb`
+**Phase 3: Multi-Agent Reasoning Engine** - See "Current Implementation" section for details.
 
-**MacroStrategy Schema:**
-```ruby
-create_table :macro_strategies do |t|
-  t.string :market_narrative
-  t.string :bias  # bullish/bearish/neutral
-  t.decimal :risk_tolerance  # 0.0 - 1.0
-  t.jsonb :key_levels  # support/resistance
-  t.jsonb :context_used
-  t.datetime :valid_until
-  t.timestamps
-end
-```
+**Phase 4: Hyperliquid Integration** - See "Current Implementation" section for details.
+- Note: Write operations still require gem enhancement - see `docs/HYPERLIQUID_GEM_WRITE_OPERATIONS_SPEC.md`
 
-**TradingDecision Schema:**
-```ruby
-create_table :trading_decisions do |t|
-  t.jsonb :context_sent      # Full prompt context
-  t.jsonb :llm_response      # Raw LLM output
-  t.jsonb :parsed_decision   # Structured decision
-  t.boolean :executed
-  t.string :rejection_reason
-  t.timestamps
-end
-```
+**Phase 5: Risk Management** - See "Current Implementation" section for details.
 
-**LLM Output Schema:**
-```json
-{
-  "operation": "open",
-  "symbol": "BTC",
-  "direction": "long",
-  "leverage": 5,
-  "target_position": 0.02,
-  "stop_loss": 95000,
-  "take_profit": 105000,
-  "confidence": 0.78,
-  "reasoning": "..."
-}
-```
-
-**High-Level Agent (Macro):**
-- Runs daily at 6am
-- Analyzes weekly trends, macro sentiment, news
-- Outputs: market narrative, bias (bullish/bearish/neutral), risk tolerance
-
-**Low-Level Agent (Execution):**
-- Runs every 5 minutes
-- Inputs: current prices, live indicators, macro strategy
-- Outputs: specific trades, entry/exit points, position sizing
-
-### Phase 4: Hyperliquid Gem Extension
-
-**Forked gem:** https://github.com/marcomd/hyperliquid
-
-**Current capabilities (read-only):**
-```ruby
-client = Hyperliquid::Client.new
-client.all_mids              # Get all mid prices
-client.user_state(address)   # Account state
-client.open_orders(address)  # Open orders
-```
-
-**Extensions to add:**
-```ruby
-client.place_order(order_params)   # Place limit/market order
-client.cancel_order(order_id)      # Cancel order
-client.modify_order(order_id, params)
-client.set_leverage(symbol, leverage)
-```
-
-**Files to create (in forked gem):**
-- `lib/hyperliquid/signer.rb` - EIP-712 signing using `eth` gem
-- `lib/hyperliquid/exchange.rb` - Write operations
-- `spec/hyperliquid/exchange_spec.rb`
-
-**Files to create (in backend):**
-- `app/models/position.rb`
-- `app/services/execution/trade_executor.rb`
-
-**Position Schema:**
-```ruby
-create_table :positions do |t|
-  t.string :symbol, null: false
-  t.string :direction  # long/short
-  t.decimal :entry_price
-  t.decimal :size
-  t.integer :leverage
-  t.decimal :stop_loss
-  t.decimal :take_profit
-  t.string :status  # open/closed/liquidated
-  t.timestamps
-end
-```
-
-### Phase 5: Risk Management & Orchestration
-
-**Files to create:**
-- `app/services/risk/risk_manager.rb`
-- Update `app/services/trading_cycle.rb`
-
-**RiskManager:**
-```ruby
-class Risk::RiskManager
-  MAX_POSITION_SIZE = 0.05  # 5% of capital
-  MIN_CONFIDENCE = 0.6
-
-  def validate(decision, portfolio)
-    return reject("Low confidence") if decision.confidence < MIN_CONFIDENCE
-    return reject("Position too large") if exceeds_limits?(decision, portfolio)
-    approve(decision)
-  end
-end
-```
-
-**TradingCycle Orchestration:**
-```ruby
-class TradingCycle
-  def execute
-    # 1. Check if macro strategy needs refresh (daily)
-    refresh_macro_strategy if macro_strategy_stale?
-
-    # 2. Run low-level agent with macro context
-    decision = low_level_agent.decide(
-      market_data: fetch_market_data,
-      macro_strategy: current_macro_strategy
-    )
-
-    # 3. Execute if approved by risk manager
-    execute_decision(decision) if risk_manager.validate(decision).approved?
-  end
-end
-```
-
-### Phase 6: React Dashboard
+### Phase 6: React Dashboard (TODO)
 
 **Structure:**
 ```
@@ -674,7 +592,7 @@ frontend/
 └── dashboard_controller.rb
 ```
 
-### Phase 7: Production Deployment
+### Phase 7: Production (TODO)
 
 **docker-compose.production.yml:**
 ```yaml
