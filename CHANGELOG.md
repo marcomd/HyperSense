@@ -2,6 +2,50 @@
 
 All notable changes to HyperSense.
 
+## [0.7.0] - 2024-12-25
+
+### Added
+- **Predictive Modeling & Weighted Context** (Phase 5.1 complete)
+  - `Forecast` model - Price predictions with MAE/MAPE accuracy tracking
+  - `Forecasting::PricePredictor` - Prophet-based ML forecasting for 1m, 15m, 1h timeframes
+  - `ForecastJob` - Background job (every 5 min) for automated price predictions
+  - `DataIngestion::NewsFetcher` - RSS news from coinjournal.net with asset filtering
+  - `DataIngestion::WhaleAlertFetcher` - Large transfer monitoring from whale-alert.io
+  - Weighted context system for LLM reasoning (forecast: 0.6, sentiment: 0.2, technical: 0.1, whale_alerts: 0.1)
+
+### Changed
+- `Reasoning::ContextAssembler` now includes:
+  - `context_weights` from Settings.weights
+  - `forecast` data from Prophet predictions
+  - `news` from RSS feed
+  - `whale_alerts` from whale-alert.io
+- `Reasoning::LowLevelAgent` system prompt updated with weight instructions
+- `Reasoning::HighLevelAgent` system prompt updated with weight instructions
+- User prompts reorganized by weight priority with clear section headers
+- Updated `config/recurring.yml` with ForecastJob schedule
+
+### Technical Details
+- Added `prophet-rb` gem for time series forecasting
+- 1 new database migration (create_forecasts)
+- 3 new data services with caching (NewsFetcher: 5min, WhaleAlertFetcher: 2min)
+- Test stubs for external services (spec/support/external_services_stubs.rb)
+- 417 total tests, all passing
+
+### Configuration
+Context weights in `config/settings.yml`:
+```yaml
+weights:
+  forecast: 0.6      # Prophet ML predictions (PRIMARY signal)
+  sentiment: 0.2     # Fear & Greed + News
+  technical: 0.1     # EMA, RSI, MACD, Pivots
+  whale_alerts: 0.1  # Large capital movements
+```
+
+### Data Sources
+- **Forecasting**: Prophet ML model trained on MarketSnapshot historical data
+- **News**: RSS from https://coinjournal.net/news/feed (no API key required)
+- **Whale Alerts**: JSON from https://whale-alert.io/data.json (no API key required)
+
 ## [0.6.0] - 2024-12-23
 
 ### Added

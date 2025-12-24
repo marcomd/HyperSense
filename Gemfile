@@ -44,6 +44,7 @@ gem "feedjira"               # RSS feed parsing
 gem "eth"                    # Ethereum utilities (EIP-712 signing for Hyperliquid)
 gem "config"                 # Settings management (config/settings.yml)
 gem "dry-validation"         # Input validation
+gem "prophet-rb"             # Time series forecasting (Meta Prophet)
 
 # Hyperliquid DEX client (forked for write operations)
 gem "hyperliquid", github: "marcomd/hyperliquid", branch: "feature/add-eip-712-signing-and-exchange-operations"

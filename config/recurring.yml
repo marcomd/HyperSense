@@ -28,6 +28,12 @@ default: &default
     queue: risk
     schedule: every minute
 
+  # Price forecasting - generates Prophet predictions for all assets
+  forecast:
+    class: ForecastJob
+    queue: analysis
+    schedule: every 5 minutes
+
 development:
   <<: *default
 

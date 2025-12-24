@@ -1,6 +1,6 @@
 # HyperSense
 
-**Version 0.6.0** | Autonomous AI Trading Agent for cryptocurrency markets.
+**Version 0.7.0** | Autonomous AI Trading Agent for cryptocurrency markets.
 
 ![HyperSense_cover1.jpg](docs/HyperSense_cover1.jpg)
 
@@ -74,8 +74,9 @@ HyperSense is an autonomous trading agent that operates in discrete cycles to an
 | Frequency | Job | Queue | Purpose |
 |-----------|-----|-------|---------|
 | Every minute | MarketSnapshotJob | data | Fetch prices, calculate indicators |
-| Every minute | RiskMonitoringJob | default | Monitor SL/TP, circuit breaker |
+| Every minute | RiskMonitoringJob | risk | Monitor SL/TP, circuit breaker |
 | Every 5 minutes | TradingCycleJob | trading | Main trading orchestration |
+| Every 5 minutes | ForecastJob | analysis | Prophet price predictions (1m, 15m, 1h) |
 | Daily (6am) | MacroStrategyJob | analysis | High-level market analysis |
 
 ### Trading Cycle (every 5 min)
@@ -121,22 +122,28 @@ HyperSense/
 │   │   │   ├── trading_cycle_job.rb
 │   │   │   ├── macro_strategy_job.rb
 │   │   │   ├── market_snapshot_job.rb
-│   │   │   └── risk_monitoring_job.rb
+│   │   │   ├── risk_monitoring_job.rb
+│   │   │   └── forecast_job.rb          # Prophet ML predictions
 │   │   ├── models/
 │   │   │   ├── market_snapshot.rb   # Time-series market data
 │   │   │   ├── macro_strategy.rb    # Daily macro analysis
 │   │   │   ├── trading_decision.rb  # Per-asset trade decisions
 │   │   │   ├── position.rb          # Open/closed positions
 │   │   │   ├── order.rb             # Exchange orders
-│   │   │   └── execution_log.rb     # Audit trail
+│   │   │   ├── execution_log.rb     # Audit trail
+│   │   │   └── forecast.rb          # Price predictions with MAE/MAPE
 │   │   └── services/
 │   │       ├── data_ingestion/
 │   │       │   ├── price_fetcher.rb      # Binance API
-│   │       │   └── sentiment_fetcher.rb  # Fear & Greed Index
+│   │       │   ├── sentiment_fetcher.rb  # Fear & Greed Index
+│   │       │   ├── news_fetcher.rb       # RSS news (coinjournal.net)
+│   │       │   └── whale_alert_fetcher.rb # Large transfers (whale-alert.io)
+│   │       ├── forecasting/
+│   │       │   └── price_predictor.rb    # Prophet ML forecasting
 │   │       ├── indicators/
 │   │       │   └── calculator.rb         # EMA, RSI, MACD, Pivots
 │   │       ├── reasoning/
-│   │       │   ├── context_assembler.rb  # Market data for LLM prompts
+│   │       │   ├── context_assembler.rb  # Weighted context for LLM
 │   │       │   ├── decision_parser.rb    # JSON validation (dry-validation)
 │   │       │   ├── high_level_agent.rb   # Macro strategy (daily)
 │   │       │   └── low_level_agent.rb    # Trade decisions (5 min)
@@ -315,7 +322,78 @@ calculator.macd(prices)      # { macd:, signal:, histogram: }
 calculator.pivot_points(high, low, close)  # { pp:, r1:, r2:, s1:, s2: }
 ```
 
-### 3. Macro Strategy (MacroStrategyJob - daily at 6am)
+### 3. Price Forecasting (ForecastJob - every 5 min)
+
+Prophet-based ML predictions for multiple timeframes.
+
+```ruby
+# Generate forecasts for all assets
+ForecastJob.perform_now
+
+# Or use the predictor directly
+predictor = Forecasting::PricePredictor.new("BTC")
+forecasts = predictor.predict_all_timeframes
+# => { "1m" => Forecast, "15m" => Forecast, "1h" => Forecast }
+
+# Forecast model
+forecast = Forecast.latest_for("BTC", "1h")
+forecast.current_price      # => 97000.0
+forecast.predicted_price    # => 97500.0
+forecast.direction          # => "bullish" / "bearish" / "neutral"
+forecast.predicted_change_pct # => 0.52
+
+# Validate past predictions against actual prices
+predictor.validate_past_forecasts
+# Updates forecast records with actual_price, mae, mape
+```
+
+### 4. News & Whale Alerts (Real-time)
+
+External signals for sentiment analysis and smart money tracking.
+
+```ruby
+# News from RSS feed (coinjournal.net)
+fetcher = DataIngestion::NewsFetcher.new
+news = fetcher.fetch
+# => [{ title: "Bitcoin...", published_at: Time, symbols: ["BTC"], ... }]
+
+# Filter news for specific assets
+fetcher.fetch_for_symbols(["BTC", "ETH"])
+
+# Whale alerts (whale-alert.io)
+whale_fetcher = DataIngestion::WhaleAlertFetcher.new
+alerts = whale_fetcher.fetch
+# => [{ amount: "1,580 BTC", usd_value: "$138M", action: "transferred...", severity: 6, signal: :neutral }]
+
+# Signal interpretation:
+# - :potentially_bullish (stablecoin minted, exchange outflow)
+# - :potentially_bearish (exchange inflow)
+# - :neutral (general transfers)
+```
+
+### 5. Weighted Context System
+
+LLM agents receive data with assigned weights for prioritization.
+
+```ruby
+# Context weights from settings.yml
+weights = {
+  forecast: 0.6,      # Price predictions (PRIMARY signal)
+  sentiment: 0.2,     # Fear & Greed + News
+  technical: 0.1,     # EMA, RSI, MACD, Pivots
+  whale_alerts: 0.1   # Large capital movements
+}
+
+# Context assembler includes all weighted data
+assembler = Reasoning::ContextAssembler.new(symbol: "BTC")
+context = assembler.for_trading(macro_strategy: MacroStrategy.active)
+# Includes: forecast, news, whale_alerts, market_data, technical_indicators, sentiment
+
+# LLM system prompt instructs to weight inputs accordingly:
+# "When data sources conflict, weight your decision according to these priorities."
+```
+
+### 6. Macro Strategy (MacroStrategyJob - daily at 6am)
 
 High-level market analysis that sets the trading bias for the day.
 
@@ -534,6 +612,15 @@ pm.update_prices
 - [x] Risk/reward validation (configurable enforcement)
 - [x] Centralized risk validation (Risk::RiskManager)
 - [x] Paper trading mode (already implemented in Phase 4)
+
+### Phase 5.1: Predictive Modeling & Weighted Context ✅
+- [x] Weighted context system (forecast: 0.6, sentiment: 0.2, technical: 0.1, whale_alerts: 0.1)
+- [x] Prophet-based price forecasting (1m, 15m, 1h predictions)
+- [x] Forecast model with MAE/MAPE validation tracking
+- [x] News fetcher (RSS from coinjournal.net)
+- [x] Whale alert fetcher (whale-alert.io free endpoint)
+- [x] Context assembler integration with all new data sources
+- [x] LLM prompts updated with weight instructions
 
 ### Phase 6: Dashboard
 - [ ] React frontend (Vite + TypeScript)

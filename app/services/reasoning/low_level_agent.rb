@@ -17,13 +17,24 @@ module Reasoning
 
       IMPORTANT: You must respond ONLY with valid JSON. No explanations outside the JSON.
 
-      Decision framework:
-      1. Analyze current price vs technical indicators
-      2. Consider macro strategy bias and risk tolerance
-      3. Evaluate entry/exit opportunities
-      4. Set appropriate stop-loss and take-profit levels
+      ## Input Weighting System
+      You will receive data with assigned weights indicating their importance in your decision:
+      - FORECAST (weight: 0.6) - Price predictions are your PRIMARY signal. Prioritize these heavily.
+      - SENTIMENT (weight: 0.2) - Market sentiment (Fear & Greed, news) provides secondary confirmation.
+      - TECHNICAL (weight: 0.1) - Technical indicators (EMA, RSI, MACD, Pivots) offer supporting context.
+      - WHALE_ALERTS (weight: 0.1) - Large capital movements indicate smart money positioning.
 
-      Output JSON schema for OPEN action:
+      When data sources conflict, weight your decision according to these priorities.
+      If forecast data is unavailable, redistribute its weight to other available sources.
+
+      ## Decision Framework
+      1. Start with FORECAST signals (if available) as primary direction indicator
+      2. Confirm with SENTIMENT data (Fear & Greed, news)
+      3. Validate entry timing using TECHNICAL indicators
+      4. Consider WHALE_ALERTS for potential sudden moves
+      5. Set appropriate stop-loss and take-profit levels
+
+      ## Output JSON schema for OPEN action:
       {
         "operation": "open",
         "symbol": "BTC" | "ETH" | "SOL" | "BNB",
@@ -33,10 +44,10 @@ module Reasoning
         "stop_loss": number (price level),
         "take_profit": number (price level),
         "confidence": number (0.6 to 1.0),
-        "reasoning": "string - concise explanation"
+        "reasoning": "string - concise explanation referencing weighted inputs"
       }
 
-      Output JSON schema for HOLD action:
+      ## Output JSON schema for HOLD action:
       {
         "operation": "hold",
         "symbol": "BTC" | "ETH" | "SOL" | "BNB",
@@ -44,7 +55,7 @@ module Reasoning
         "reasoning": "string - explanation for not trading"
       }
 
-      Rules:
+      ## Rules:
       - ONLY suggest "open" if you see a clear opportunity aligned with macro bias
       - "hold" is the default when conditions are unclear or no edge exists
       - Confidence < 0.6 should result in "hold"
@@ -98,48 +109,109 @@ module Reasoning
     private
 
     def build_user_prompt(context)
+      weights = context[:weights] || default_weights
       <<~PROMPT
         Make a trading decision for #{context[:symbol]} based on the following data:
 
         ## Current Time
         #{context[:timestamp]}
 
-        ## Market Data
-        - Current Price: $#{context.dig(:market_data, :price)}
-        - 24h High: $#{context.dig(:market_data, :high_24h)}
-        - 24h Low: $#{context.dig(:market_data, :low_24h)}
-        - 24h Change: #{context.dig(:market_data, :price_change_pct_24h)}%
+        ## Input Weights (prioritize accordingly)
+        #{format_weights(weights)}
 
-        ## Technical Indicators
+        ---
+
+        ## [FORECAST] Price Predictions (weight: #{weights[:forecast]})
+        #{format_forecast(context[:forecast])}
+
+        ---
+
+        ## [SENTIMENT] Market Sentiment (weight: #{weights[:sentiment]})
+        - Fear & Greed Index: #{context.dig(:sentiment, :fear_greed_value)} (#{context.dig(:sentiment, :fear_greed_classification)})
+        #{format_news(context[:news])}
+
+        ---
+
+        ## [TECHNICAL] Technical Analysis (weight: #{weights[:technical]})
+        Current Price: $#{context.dig(:market_data, :price)} (24h: #{context.dig(:market_data, :price_change_pct_24h)}%)
+
+        Indicators:
         - EMA-20: $#{format_number(context.dig(:technical_indicators, :ema_20))}
         - EMA-50: $#{format_number(context.dig(:technical_indicators, :ema_50))}
         - RSI(14): #{format_number(context.dig(:technical_indicators, :rsi_14))}
         - MACD: #{format_macd(context.dig(:technical_indicators, :macd))}
         - Pivot Points: #{format_pivots(context.dig(:technical_indicators, :pivot_points))}
 
-        ## Signals
+        Signals:
         - RSI Signal: #{context.dig(:technical_indicators, :signals, :rsi)}
         - MACD Signal: #{context.dig(:technical_indicators, :signals, :macd)}
         - Above EMA-20: #{context.dig(:technical_indicators, :signals, :above_ema_20)}
         - Above EMA-50: #{context.dig(:technical_indicators, :signals, :above_ema_50)}
 
-        ## Sentiment
-        - Fear & Greed: #{context.dig(:sentiment, :fear_greed_value)} (#{context.dig(:sentiment, :fear_greed_classification)})
+        Recent Action:
+        - Trend: #{context.dig(:recent_price_action, :trend)}
+        - 24h Range: $#{context.dig(:recent_price_action, :low)} - $#{context.dig(:recent_price_action, :high)}
+
+        ---
+
+        ## [WHALE_ALERTS] Large Capital Movements (weight: #{weights[:whale_alerts]})
+        #{format_whale_alerts(context[:whale_alerts])}
+
+        ---
 
         ## Macro Strategy
         #{format_macro_context(context[:macro_context])}
-
-        ## Recent Price Action
-        - Trend: #{context.dig(:recent_price_action, :trend)}
-        - 24h Range: $#{context.dig(:recent_price_action, :low)} - $#{context.dig(:recent_price_action, :high)}
 
         ## Risk Parameters
         - Max Position: #{(context.dig(:risk_parameters, :max_position_size) || 0.05) * 100}% of capital
         - Max Leverage: #{context.dig(:risk_parameters, :max_leverage) || 10}x
         - Min Confidence: #{(context.dig(:risk_parameters, :min_confidence) || 0.6) * 100}%
 
-        Provide your trading decision in JSON format.
+        Provide your trading decision in JSON format, weighing inputs according to their assigned weights.
       PROMPT
+    end
+
+    def default_weights
+      {
+        forecast: Settings.weights.forecast,
+        sentiment: Settings.weights.sentiment,
+        technical: Settings.weights.technical,
+        whale_alerts: Settings.weights.whale_alerts
+      }
+    end
+
+    def format_weights(weights)
+      weights.map { |k, v| "- #{k.to_s.upcase}: #{v}" }.join("\n")
+    end
+
+    def format_forecast(forecast)
+      return "No forecast data available - redistribute weight to other signals" unless forecast
+
+      lines = []
+      forecast.each do |timeframe, data|
+        lines << "- #{timeframe}: Current $#{format_number(data[:current_price])} → Predicted $#{format_number(data[:predicted_price])} (#{data[:direction]})"
+      end
+      lines.join("\n")
+    end
+
+    def format_news(news)
+      return "" unless news&.any?
+
+      lines = [ "\nRecent News:" ]
+      news.first(5).each do |item|
+        lines << "- #{item[:title]}"
+      end
+      lines.join("\n")
+    end
+
+    def format_whale_alerts(alerts)
+      return "No recent whale alerts" unless alerts&.any?
+
+      lines = []
+      alerts.first(5).each do |alert|
+        lines << "- #{alert[:action]}: #{alert[:amount]} (#{alert[:usd_value]})"
+      end
+      lines.join("\n")
     end
 
     def format_number(value)

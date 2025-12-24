@@ -28,6 +28,32 @@ The agent requires a multi-faceted input stream to minimize "noise" and improve 
 - **Forecasting Module:** A dedicated model to predict price trends over different timeframes (1 min, 15 min, 1 hour).  
 - **Weighted Importance:** Ability to assign manual weights to specific inputs (e.g., Forecast weight: 0.6; Sentiment weight: 0.2) to refine the strategy.  
 
+To implement the Predictive Modeling module and Weighted Importance management in your AI agent, you can follow these detailed technical guidelines:
+
+1. Forecasting Module
+  This module generates predictive price signals independent of news, based purely on the statistical analysis of historical data.
+  - Suggested Model: Use Meta's Prophet, a machine learning model optimized for time series that identifies trends and seasonality.
+  - Multi-Timeframe Management:
+  - The system must download historical data (e.g., BTC/USD, ETH/USD) for different time intervals.
+  - It must generate specific forecasts for 1 minute, 15 minutes, and 1 hour.
+  - While the 1-minute forecast is used for immediate accuracy, longer timeframes (15 minutes and 1 hour) help identify macro trends.
+  - Technical Workflow:
+2. Initialization: Download historical data via API or CCXT protocol.
+3. Training: The model is trained on the downloaded dataset for each ticker (BTC, ETH, etc.).
+4. Output: The module produces a table comparing the latest real price with the future forecast (e.g., "Current price: 104.298, 1-minute forecast: 104.079").
+5. Validation: Record each forecast in a relational database (e.g., PostgreSQL) to subsequently compare it with the real price and calculate the mean absolute error (Mean Absolute Error).
+6. Weighted Importance
+   Adding weights allows you to "instruct" the AI on which signals to prioritize, refining the strategy without modifying the logic.
+   - Manual Assignment: The system must allow you to define numeric variables (weights) for each input category. For example:
+   - Forecast weight: 0.6 (High priority to statistical forecasts).
+   - Sentiment weight: 0.2 (Moderate importance to the Fear & Greed Index).
+   - Whale Alert weight: 0.1 (Secondary signal for large capital movements).
+   - Pivot Point weight: 0.1 (Technical signal for support and resistance).
+   - Integration into the Prompt: These weights are inserted directly into the System Prompt sent to the LLM (such as GPT-4 or DeepSeek).
+   - Strategic Advantage: Thanks to these values, the AI model will assign more or less importance to the information received; for example, if the volume weight is 0.8, the agent will focus more on that data when deciding whether to open or close a position.
+   Integration Summary
+   All the data produced by the forecasting module and the corresponding importance weights are concatenated into a well-formatted text string (Context Info). This "package" of information enters the AI Agent, which analyzes it to generate a JSON object containing the final decision (operation, direction, leverage, and reasoning).
+
 ### 3. Reasoning Engine  
 The core logic utilizes a Large Language Model (LLM) capable of structured reasoning.  
 - **Chain of Thought:** The model must "think" through its analysis before outputting a decision.  

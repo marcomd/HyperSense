@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2025_12_23_100003) do
+ActiveRecord::Schema[8.1].define(version: 2025_12_24_230459) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -30,6 +30,24 @@ ActiveRecord::Schema[8.1].define(version: 2025_12_23_100003) do
     t.index ["loggable_type", "loggable_id"], name: "index_execution_logs_on_loggable"
     t.index ["loggable_type", "loggable_id"], name: "index_execution_logs_on_loggable_type_and_loggable_id"
     t.index ["status"], name: "index_execution_logs_on_status"
+  end
+
+  create_table "forecasts", force: :cascade do |t|
+    t.decimal "actual_price", precision: 20, scale: 8
+    t.datetime "created_at", null: false
+    t.decimal "current_price", precision: 20, scale: 8, null: false
+    t.datetime "forecast_for", null: false
+    t.decimal "mae", precision: 10, scale: 6
+    t.decimal "mape", precision: 10, scale: 4
+    t.decimal "predicted_price", precision: 20, scale: 8, null: false
+    t.string "symbol", null: false
+    t.string "timeframe", null: false
+    t.datetime "updated_at", null: false
+    t.index ["forecast_for"], name: "index_forecasts_on_forecast_for"
+    t.index ["symbol", "timeframe", "forecast_for"], name: "index_forecasts_on_symbol_and_timeframe_and_forecast_for", unique: true
+    t.index ["symbol", "timeframe"], name: "index_forecasts_on_symbol_and_timeframe"
+    t.index ["symbol"], name: "index_forecasts_on_symbol"
+    t.index ["timeframe"], name: "index_forecasts_on_timeframe"
   end
 
   create_table "macro_strategies", force: :cascade do |t|

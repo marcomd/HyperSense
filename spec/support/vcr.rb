@@ -15,6 +15,9 @@ VCR.configure do |config|
   # Allow localhost connections for test database
   config.ignore_localhost = true
 
+  # External data sources (news, whale alerts) are stubbed in
+  # spec/support/external_services_stubs.rb by default
+
   # Default cassette options
   config.default_cassette_options = {
     record: :once,
