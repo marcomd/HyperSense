@@ -6,8 +6,9 @@
 # 1. Ensure valid macro strategy exists
 # 2. Run low-level agent for all assets
 # 3. Log trading decisions
-# 4. (Phase 4/5) Apply risk management
-# 5. (Phase 4/5) Execute approved trades
+# 4. Apply risk management
+# 5. Execute approved trades
+# 6. Broadcast updates via ActionCable
 #
 class TradingCycleJob < ApplicationJob
   queue_as :trading
@@ -22,6 +23,19 @@ class TradingCycleJob < ApplicationJob
     Rails.logger.info "[TradingCycle] Trading cycle complete: " \
                       "#{decisions.size} decisions, #{actionable_count} actionable"
 
+    # Broadcast decisions via ActionCable
+    broadcast_decisions(decisions)
+
     decisions
+  end
+
+  private
+
+  def broadcast_decisions(decisions)
+    decisions.each do |decision|
+      DashboardChannel.broadcast_decision(decision)
+    end
+  rescue StandardError => e
+    Rails.logger.error "[TradingCycle] Broadcast error: #{e.message}"
   end
 end

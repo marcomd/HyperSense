@@ -1,6 +1,6 @@
 # HyperSense
 
-**Version 0.7.0** | Autonomous AI Trading Agent for cryptocurrency markets.
+**Version 0.8.0** | Autonomous AI Trading Agent for cryptocurrency markets.
 
 ![HyperSense_cover1.jpg](docs/HyperSense_cover1.jpg)
 
@@ -118,6 +118,16 @@ All day  → TradingCycleJob (5min) makes decisions within macro bias
 HyperSense/
 ├── backend/                         # Rails 8 API
 │   ├── app/
+│   │   ├── channels/               # ActionCable WebSocket channels
+│   │   │   ├── dashboard_channel.rb     # Real-time dashboard updates
+│   │   │   └── markets_channel.rb       # Price updates by symbol
+│   │   ├── controllers/
+│   │   │   └── api/v1/            # REST API endpoints
+│   │   │       ├── dashboard_controller.rb
+│   │   │       ├── positions_controller.rb
+│   │   │       ├── decisions_controller.rb
+│   │   │       ├── market_data_controller.rb
+│   │   │       └── macro_strategies_controller.rb
 │   │   ├── jobs/                   # Solid Queue jobs
 │   │   │   ├── trading_cycle_job.rb
 │   │   │   ├── macro_strategy_job.rb
@@ -167,7 +177,17 @@ HyperSense/
 │       └── services/
 │           ├── indicators/calculator_spec.rb
 │           └── data_ingestion/
-├── frontend/                        # React dashboard (TODO: Phase 6)
+├── frontend/                        # React dashboard (Vite + TypeScript)
+│   ├── src/
+│   │   ├── api/                   # API client
+│   │   ├── components/            # React components
+│   │   │   ├── cards/            # AccountSummary, PositionsTable, DecisionLog, etc.
+│   │   │   ├── charts/           # EquityCurve, PriceChart
+│   │   │   └── layout/           # Header
+│   │   ├── hooks/                # useApi, useWebSocket
+│   │   ├── pages/                # Dashboard
+│   │   └── types/                # TypeScript definitions
+│   └── package.json
 ├── docker-compose.yml               # PostgreSQL only
 └── .tool-versions                   # Ruby 3.4.4, Node 24.11.1
 ```
@@ -236,6 +256,15 @@ HyperSense/
    ```bash
    bin/jobs
    ```
+
+10. **Start the frontend** (new terminal)
+    ```bash
+    cd frontend
+    npm install
+    npm run dev
+    ```
+
+    The dashboard will be available at http://localhost:5173
 
 ## Configuration
 
@@ -622,12 +651,15 @@ pm.update_prices
 - [x] Context assembler integration with all new data sources
 - [x] LLM prompts updated with weight instructions
 
-### Phase 6: Dashboard
-- [ ] React frontend (Vite + TypeScript)
-- [ ] Equity curve (recharts/lightweight-charts)
-- [ ] Position tracking
-- [ ] Decision logs
-- [ ] ActionCable WebSocket
+### Phase 6: Dashboard ✅
+- [x] React frontend (Vite + TypeScript)
+- [x] Equity curve (recharts)
+- [x] Position tracking
+- [x] Decision logs
+- [x] ActionCable WebSocket real-time updates
+- [x] API v1 controllers (dashboard, positions, decisions, market_data, macro_strategies)
+- [x] Market overview with forecasts and indicators
+- [x] System status monitoring
 
 ### Phase 7: Production
 - [ ] Dockerfile
@@ -647,37 +679,54 @@ pm.update_prices
 
 **Phase 5: Risk Management** - See "Current Implementation" section for details.
 
-### Phase 6: React Dashboard (TODO)
+### Phase 6: React Dashboard (Completed)
 
-**Structure:**
+**API Endpoints:**
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/v1/dashboard` | GET | Aggregated dashboard data |
+| `/api/v1/dashboard/account` | GET | Account summary |
+| `/api/v1/dashboard/system_status` | GET | System health status |
+| `/api/v1/positions` | GET | All positions (paginated) |
+| `/api/v1/positions/open` | GET | Open positions with summary |
+| `/api/v1/positions/performance` | GET | Equity curve and statistics |
+| `/api/v1/decisions` | GET | Trading decisions (paginated) |
+| `/api/v1/decisions/recent` | GET | Last N decisions |
+| `/api/v1/decisions/stats` | GET | Decision statistics |
+| `/api/v1/market_data/current` | GET | Current prices and indicators |
+| `/api/v1/market_data/:symbol/history` | GET | Historical price data |
+| `/api/v1/market_data/forecasts` | GET | Price forecasts |
+| `/api/v1/macro_strategies/current` | GET | Active macro strategy |
+
+**WebSocket Channels:**
+
+```javascript
+// Connect to dashboard channel for real-time updates
+const subscription = cable.subscriptions.create("DashboardChannel", {
+  received(data) {
+    // data.type: market_update, position_update, decision_update, macro_strategy_update
+    console.log(data);
+  }
+});
+
+// Connect to markets channel for price updates
+const markets = cable.subscriptions.create({ channel: "MarketsChannel", symbol: "BTC" }, {
+  received(data) {
+    console.log(data);
+  }
+});
 ```
-frontend/
-├── src/
-│   ├── components/
-│   │   ├── EquityCurve.tsx
-│   │   ├── PositionsTable.tsx
-│   │   ├── DecisionLog.tsx
-│   │   ├── MacroStrategy.tsx
-│   │   └── PriceChart.tsx
-│   ├── hooks/
-│   │   └── useWebSocket.ts
-│   └── pages/
-│       └── Dashboard.tsx
-└── package.json
-```
 
-**Charting:** `recharts` or `lightweight-charts` (TradingView)
+**Dashboard Components:**
 
-**Real-time:** ActionCable WebSocket → React subscription
-
-**API Controllers to create:**
-```ruby
-# app/controllers/api/v1/
-├── positions_controller.rb
-├── decisions_controller.rb
-├── market_data_controller.rb
-└── dashboard_controller.rb
-```
+- **AccountSummary** - Open positions count, unrealized PnL, margin used, daily P&L
+- **MarketOverview** - Current prices, RSI, MACD, EMA signals, forecasts for all assets
+- **PositionsTable** - Open positions with entry price, current price, PnL, SL/TP
+- **EquityCurve** - Cumulative PnL chart with win rate and statistics
+- **MacroStrategyCard** - Current market bias, risk tolerance, narrative, key levels
+- **DecisionLog** - Recent trading decisions with reasoning
+- **SystemStatus** - Health status of market data, trading cycle, macro strategy
 
 ### Phase 7: Production (TODO)
 

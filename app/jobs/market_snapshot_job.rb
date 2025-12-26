@@ -7,6 +7,7 @@
 # 2. Calculate technical indicators
 # 3. Fetch sentiment data
 # 4. Store snapshot in database for historical analysis
+# 5. Broadcast updates via ActionCable for real-time dashboard
 #
 class MarketSnapshotJob < ApplicationJob
   queue_as :data
@@ -24,18 +25,23 @@ class MarketSnapshotJob < ApplicationJob
 
     # Fetch prices and create snapshots for each asset
     assets = Settings.assets || %w[BTC ETH SOL BNB]
+    snapshots = []
 
     assets.each do |asset|
-      create_snapshot(
+      snapshot = create_snapshot(
         asset: asset,
         price_fetcher: price_fetcher,
         indicator_calculator: indicator_calculator,
         sentiment: sentiment,
         captured_at: captured_at
       )
+      snapshots << snapshot if snapshot
     rescue StandardError => e
       Rails.logger.error "[MarketSnapshot] Error for #{asset}: #{e.message}"
     end
+
+    # Broadcast to WebSocket subscribers
+    broadcast_updates(snapshots) if snapshots.any?
 
     Rails.logger.info "[MarketSnapshot] Snapshot complete for #{assets.size} assets"
   end
@@ -57,7 +63,7 @@ class MarketSnapshotJob < ApplicationJob
     )
 
     # Create snapshot
-    MarketSnapshot.create!(
+    snapshot = MarketSnapshot.create!(
       symbol: asset,
       price: ticker[:price],
       high_24h: ticker[:high_24h],
@@ -70,5 +76,30 @@ class MarketSnapshotJob < ApplicationJob
     )
 
     Rails.logger.info "[MarketSnapshot] #{asset}: $#{ticker[:price]} | RSI: #{indicators[:rsi_14]&.round(1)}"
+    snapshot
+  end
+
+  def broadcast_updates(snapshots)
+    # Broadcast via MarketsChannel for price updates
+    MarketsChannel.broadcast_snapshots(snapshots)
+
+    # Also broadcast market summary via DashboardChannel
+    market_data = snapshots.to_h do |s|
+      indicators = s.indicators || {}
+      [
+        s.symbol,
+        {
+          price: s.price.to_f,
+          rsi: indicators["rsi_14"]&.round(1),
+          rsi_signal: s.rsi_signal,
+          macd_signal: s.macd_signal,
+          updated_at: s.captured_at.iso8601
+        }
+      ]
+    end
+
+    DashboardChannel.broadcast_market_update(market_data)
+  rescue StandardError => e
+    Rails.logger.error "[MarketSnapshot] Broadcast error: #{e.message}"
   end
 end
