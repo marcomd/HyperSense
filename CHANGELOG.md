@@ -2,6 +2,58 @@
 
 All notable changes to HyperSense.
 
+## [0.9.0] - 2025-12-26
+
+### Added
+- **Market Data List Endpoints** - New paginated API endpoints for frontend detail pages
+  - `GET /api/v1/market_data/snapshots` - Paginated market snapshots with filters (symbol, date range)
+  - `GET /api/v1/market_data/forecasts?page=1` - Paginated forecasts list format (vs aggregated for dashboard)
+  - `serialize_snapshot_list` - Snapshot serializer for list views with RSI/MACD signals
+  - `serialize_forecast_list` - Forecast serializer for list views with id, symbol, timeframe
+  - `render_forecasts_list` - Private method for paginated forecast list rendering
+
+### Changed
+- `MarketDataController#forecasts` now supports dual formats:
+  - Without pagination params: Returns aggregated format grouped by symbol/timeframe (dashboard)
+  - With pagination params (`page`, `per_page`): Returns paginated list format (detail pages)
+
+### Technical Details
+- 1 new factory: `spec/factories/forecasts.rb`
+- 1 new request spec: `spec/requests/api/v1/market_data_spec.rb` (12 examples)
+- Filters supported: `symbol`, `timeframe`, `start_date`, `end_date`, `page`, `per_page`
+
+## [0.8.0] - 2025-12-26
+
+### Added
+- **REST API Controllers** - Full API layer for React dashboard
+  - `Api::V1::DashboardController` - Aggregated dashboard data (account, positions, market, strategy)
+  - `Api::V1::PositionsController` - Positions CRUD with open/performance endpoints
+  - `Api::V1::DecisionsController` - Trading decisions with recent/stats endpoints
+  - `Api::V1::MarketDataController` - Current prices, history, forecasts per symbol
+  - `Api::V1::MacroStrategiesController` - Strategy history with current endpoint
+  - `Api::V1::HealthController` - Health check with version info
+  - `Api::V1::BaseController` - Shared error handling and JSON responses
+
+- **ActionCable WebSocket Channels** - Real-time updates for dashboard
+  - `DashboardChannel` - Broadcasts market, position, decision, strategy updates
+  - `MarketsChannel` - Per-symbol price ticker subscriptions
+  - Connection authentication and channel authorization
+
+- **Background Job Broadcasts** - Jobs now broadcast updates via ActionCable
+  - `MarketSnapshotJob` - Broadcasts to DashboardChannel and MarketsChannel
+  - `TradingCycleJob` - Broadcasts decision updates
+  - `MacroStrategyJob` - Broadcasts strategy updates
+
+### Changed
+- Updated `config/routes.rb` with full API v1 namespace
+- Updated `config/database.yml` for ActionCable cable database
+- Added CORS configuration for React frontend
+
+### Technical Details
+- 3 new request specs (dashboard, health, positions)
+- ActionCable mounted at `/cable`
+- JSON API responses with pagination meta
+
 ## [0.7.0] - 2024-12-25
 
 ### Added

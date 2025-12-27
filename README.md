@@ -1,6 +1,6 @@
 # HyperSense
 
-**Version 0.8.0** | Autonomous AI Trading Agent for cryptocurrency markets.
+**Version 0.9.0** | Autonomous AI Trading Agent for cryptocurrency markets.
 
 ![HyperSense_cover1.jpg](docs/HyperSense_cover1.jpg)
 
@@ -14,7 +14,7 @@ HyperSense is an autonomous trading agent that operates in discrete cycles to an
 - **Multi-Agent Architecture**: High-level (macro strategy) + Low-level (trade execution) agents
 - **Technical Analysis**: EMA, RSI, MACD, Pivot Points
 - **Risk Management**: Position sizing, stop-loss, take-profit, confidence scoring
-- **Real-time Dashboard**: React frontend for monitoring (coming soon)
+- **Real-time Dashboard**: React frontend with routing, filters, and detail pages
 
 ## Architecture
 
@@ -109,7 +109,7 @@ All day  → TradingCycleJob (5min) makes decisions within macro bias
 | LLM | Anthropic Ruby SDK | Official SDK |
 | Exchange | hyperliquid gem (forked) | Extend with write ops |
 | Signing | eth gem | EIP-712 for Hyperliquid |
-| Frontend | React + Vite + TypeScript | Rich charting |
+| Frontend | React + Vite + TypeScript | Rich charting, React Router |
 | Deployment | Docker Compose | Simple VPS setup |
 
 ## Project Structure
@@ -183,9 +183,11 @@ HyperSense/
 │   │   ├── components/            # React components
 │   │   │   ├── cards/            # AccountSummary, PositionsTable, DecisionLog, etc.
 │   │   │   ├── charts/           # EquityCurve, PriceChart
+│   │   │   ├── common/           # DataTable, PageLayout
+│   │   │   ├── filters/          # DateRangeFilter, SymbolFilter, Pagination, etc.
 │   │   │   └── layout/           # Header
-│   │   ├── hooks/                # useApi, useWebSocket
-│   │   ├── pages/                # Dashboard
+│   │   ├── hooks/                # useApi, useWebSocket, useFilters, usePagination
+│   │   ├── pages/                # Dashboard, ForecastsPage, MarketSnapshotsPage, etc.
 │   │   └── types/                # TypeScript definitions
 │   └── package.json
 ├── docker-compose.yml               # PostgreSQL only
@@ -660,6 +662,9 @@ pm.update_prices
 - [x] API v1 controllers (dashboard, positions, decisions, market_data, macro_strategies)
 - [x] Market overview with forecasts and indicators
 - [x] System status monitoring
+- [x] React Router with detail pages (decisions, strategies, forecasts, snapshots)
+- [x] Reusable filter components (date range, symbol, status, search, pagination)
+- [x] Paginated list endpoints with filters
 
 ### Phase 7: Production
 - [ ] Dockerfile
@@ -696,7 +701,9 @@ pm.update_prices
 | `/api/v1/decisions/stats` | GET | Decision statistics |
 | `/api/v1/market_data/current` | GET | Current prices and indicators |
 | `/api/v1/market_data/:symbol/history` | GET | Historical price data |
-| `/api/v1/market_data/forecasts` | GET | Price forecasts |
+| `/api/v1/market_data/forecasts` | GET | Price forecasts (aggregated or paginated list) |
+| `/api/v1/market_data/snapshots` | GET | Market snapshots (paginated with filters) |
+| `/api/v1/macro_strategies` | GET | Macro strategies (paginated) |
 | `/api/v1/macro_strategies/current` | GET | Active macro strategy |
 
 **WebSocket Channels:**
@@ -727,6 +734,25 @@ const markets = cable.subscriptions.create({ channel: "MarketsChannel", symbol: 
 - **MacroStrategyCard** - Current market bias, risk tolerance, narrative, key levels
 - **DecisionLog** - Recent trading decisions with reasoning
 - **SystemStatus** - Health status of market data, trading cycle, macro strategy
+
+**Detail Pages (with React Router):**
+
+| Route | Page | Features |
+|-------|------|----------|
+| `/` | Dashboard | Main dashboard with all cards |
+| `/decisions` | DecisionsPage | Trading decisions with status, operation, symbol filters |
+| `/macro-strategies` | MacroStrategiesPage | Strategy history with bias filter, expandable narrative |
+| `/forecasts` | ForecastsPage | Price forecasts with symbol, timeframe, date filters |
+| `/market-snapshots` | MarketSnapshotsPage | Market snapshots with RSI/MACD signals, expandable indicators |
+
+**Filter Components:**
+
+- **DateRangeFilter** - Date range with 24h, 7d, 30d presets
+- **SymbolFilter** - Dropdown for BTC, ETH, SOL, BNB
+- **StatusFilter** - Generic status/bias/operation dropdown
+- **SearchFilter** - Debounced text search (300ms)
+- **Pagination** - Page navigation with size selector
+- **DataTable** - Generic table with loading skeleton, empty state, expandable rows
 
 ### Phase 7: Production (TODO)
 

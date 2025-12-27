@@ -50,8 +50,14 @@ module Api
       end
 
       # GET /api/v1/market_data/forecasts
-      # Returns latest forecasts for all assets
+      # Returns forecasts - paginated list if page param present, otherwise aggregated
       def forecasts
+        # If pagination params present, return list format
+        if params[:page].present? || params[:per_page].present?
+          return render_forecasts_list
+        end
+
+        # Otherwise return aggregated format for dashboard
         forecasts_data = Settings.assets.to_h do |symbol|
           forecasts = Forecast::VALID_TIMEFRAMES.to_h do |tf|
             forecast = Forecast.latest_for(symbol, tf)
@@ -61,6 +67,35 @@ module Api
         end
 
         render json: { forecasts: forecasts_data }
+      end
+
+      # GET /api/v1/market_data/snapshots
+      # Returns paginated list of market snapshots with filters
+      def snapshots
+        scope = MarketSnapshot.order(captured_at: :desc)
+
+        # Apply filters
+        scope = scope.for_symbol(params[:symbol].upcase) if params[:symbol].present?
+        scope = scope.where("captured_at >= ?", params[:start_date]) if params[:start_date].present?
+        scope = scope.where("captured_at <= ?", params[:end_date]) if params[:end_date].present?
+
+        # Pagination
+        page = (params[:page] || 1).to_i
+        per_page = (params[:per_page] || 25).to_i.clamp(1, 100)
+        total = scope.count
+        total_pages = (total.to_f / per_page).ceil
+
+        snapshots = scope.offset((page - 1) * per_page).limit(per_page)
+
+        render json: {
+          snapshots: snapshots.map { |s| serialize_snapshot_list(s) },
+          meta: {
+            page: page,
+            per_page: per_page,
+            total: total,
+            total_pages: total_pages
+          }
+        }
       end
 
       # GET /api/v1/market_data/:symbol/forecasts
@@ -123,6 +158,21 @@ module Api
         data
       end
 
+      def serialize_snapshot_list(snapshot)
+        indicators = snapshot.indicators || {}
+        {
+          id: snapshot.id,
+          symbol: snapshot.symbol,
+          price: snapshot.price.to_f,
+          rsi_14: indicators["rsi_14"]&.round(2),
+          rsi_signal: snapshot.rsi_signal,
+          macd_signal: snapshot.macd_signal,
+          ema_status: snapshot.above_ema?(20) ? "above" : "below",
+          indicators: indicators,
+          captured_at: snapshot.captured_at.iso8601
+        }
+      end
+
       def serialize_forecast(forecast)
         {
           current_price: forecast.current_price.to_f,
@@ -131,6 +181,48 @@ module Api
           change_pct: forecast.predicted_change_pct,
           forecast_for: forecast.forecast_for.iso8601,
           created_at: forecast.created_at.iso8601
+        }
+      end
+
+      def serialize_forecast_list(forecast)
+        {
+          id: forecast.id,
+          symbol: forecast.symbol,
+          timeframe: forecast.timeframe,
+          current_price: forecast.current_price.to_f,
+          predicted_price: forecast.predicted_price.to_f,
+          direction: forecast.direction,
+          change_pct: forecast.predicted_change_pct,
+          forecast_for: forecast.forecast_for.iso8601,
+          created_at: forecast.created_at.iso8601
+        }
+      end
+
+      def render_forecasts_list
+        scope = Forecast.order(created_at: :desc)
+
+        # Apply filters
+        scope = scope.for_symbol(params[:symbol].upcase) if params[:symbol].present?
+        scope = scope.for_timeframe(params[:timeframe]) if params[:timeframe].present?
+        scope = scope.where("created_at >= ?", params[:start_date]) if params[:start_date].present?
+        scope = scope.where("created_at <= ?", params[:end_date]) if params[:end_date].present?
+
+        # Pagination
+        page = (params[:page] || 1).to_i
+        per_page = (params[:per_page] || 25).to_i.clamp(1, 100)
+        total = scope.count
+        total_pages = (total.to_f / per_page).ceil
+
+        forecasts = scope.offset((page - 1) * per_page).limit(per_page)
+
+        render json: {
+          forecasts: forecasts.map { |f| serialize_forecast_list(f) },
+          meta: {
+            page: page,
+            per_page: per_page,
+            total: total,
+            total_pages: total_pages
+          }
         }
       end
 

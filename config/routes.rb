@@ -35,6 +35,7 @@ Rails.application.routes.draw do
       # Market Data
       get "market_data/current", to: "market_data#current"
       get "market_data/forecasts", to: "market_data#forecasts"
+      get "market_data/snapshots", to: "market_data#snapshots"
       get "market_data/:symbol", to: "market_data#show", constraints: { symbol: /[A-Za-z]+/ }
       get "market_data/:symbol/history", to: "market_data#history", constraints: { symbol: /[A-Za-z]+/ }
       get "market_data/:symbol/forecasts", to: "market_data#symbol_forecasts", constraints: { symbol: /[A-Za-z]+/ }
