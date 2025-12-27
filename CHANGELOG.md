@@ -2,6 +2,11 @@
 
 All notable changes to HyperSense.
 
+## [0.10.0] - 2025-12-27
+
+### Changed
+- Improved the prompt for making both low and high agents to work with clearer instructions and added psychological pressure
+
 ## [0.9.0] - 2025-12-26
 
 ### Added

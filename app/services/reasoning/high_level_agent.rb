@@ -99,46 +99,55 @@ module Reasoning
     def build_user_prompt(context)
       weights = context[:weights] || default_weights
       <<~PROMPT
-        Analyze the following market data and provide your macro strategy for today:
+        # Financial analysis of the crypto market
+        
+        ## Role
+        You are a senior cryptocurrency macro strategist for an autonomous trading system.
+        Your role is to analyze market conditions and provide strategic guidance for the day.
 
-        ## Current Timestamp
+        ## Context Data
+        ### Current Timestamp
         #{context[:timestamp]}
 
-        ## Input Weights (prioritize accordingly)
+        ### Input Weights (prioritize accordingly)
         #{format_weights(weights)}
 
         ---
 
-        ## [FORECAST] Price Predictions (weight: #{weights[:forecast]})
+        ### [FORECAST] Price Predictions (weight: #{weights[:forecast]})
         #{format_forecasts(context[:forecasts])}
 
         ---
 
-        ## [SENTIMENT] Market Sentiment (weight: #{weights[:sentiment]})
+        ### [SENTIMENT] Market Sentiment (weight: #{weights[:sentiment]})
         Fear & Greed Index: #{context.dig(:market_sentiment, :fear_greed_value)} (#{context.dig(:market_sentiment, :fear_greed_classification)})
         #{format_news(context[:news])}
 
         ---
 
-        ## [TECHNICAL] Technical Analysis (weight: #{weights[:technical]})
+        ### [TECHNICAL] Technical Analysis (weight: #{weights[:technical]})
         ### Assets Overview
         #{format_assets_overview(context[:assets_overview])}
 
-        ### Historical Trends (#{ContextAssembler::LOOKBACK_DAYS_MACRO} days)
+        #### Historical Trends (#{ContextAssembler::LOOKBACK_DAYS_MACRO} days)
         #{format_historical_trends(context[:historical_trends])}
 
         ---
 
-        ## [WHALE_ALERTS] Large Capital Movements (weight: #{weights[:whale_alerts]})
+        ### [WHALE_ALERTS] Large Capital Movements (weight: #{weights[:whale_alerts]})
         #{format_whale_alerts(context[:whale_alerts])}
 
         ---
 
-        ## Risk Parameters
+        ### Risk Parameters
         - Max Position Size: #{context.dig(:risk_parameters, :max_position_size)}
         - Max Leverage: #{context.dig(:risk_parameters, :max_leverage)}
 
+        ## Instructions
+        Analyze the following market data and provide your macro strategy for today.
+        Use the assigned weights to prioritize inputs accordingly.
         Provide your macro strategy in JSON format, weighing inputs according to their assigned weights.
+        It is extremely important to be accurate since a wrong analysis causes us to lose a lot of money.
       PROMPT
     end
 
