@@ -97,6 +97,88 @@ RSpec.describe Execution::PositionManager do
       expect(log.action).to eq("sync_position")
       expect(log.status).to eq("success")
     end
+
+    # Regression tests for nil handling (v0.13.1)
+    context "when API returns incomplete position data" do
+      let(:positions_with_missing_entry_px) do
+        {
+          "assetPositions" => [
+            {
+              "position" => {
+                "coin" => "BTC",
+                "szi" => "0.1",
+                "entryPx" => nil, # Missing entry price
+                "markPx" => "102000.0"
+              }
+            },
+            {
+              "position" => {
+                "coin" => "ETH",
+                "szi" => "-1.0",
+                "entryPx" => "3500.0",
+                "markPx" => "3400.0"
+              }
+            }
+          ]
+        }
+      end
+
+      let(:positions_with_missing_coin) do
+        {
+          "assetPositions" => [
+            {
+              "position" => {
+                "coin" => nil, # Missing symbol
+                "szi" => "0.1",
+                "entryPx" => "100000.0"
+              }
+            }
+          ]
+        }
+      end
+
+      it "skips positions with missing entryPx without crashing" do
+        allow(mock_client).to receive(:user_state).and_return(positions_with_missing_entry_px)
+
+        expect { manager.sync_from_hyperliquid }.not_to raise_error
+        expect(Position.count).to eq(1) # Only ETH position created
+        expect(Position.find_by(symbol: "ETH")).to be_present
+      end
+
+      it "logs a warning for positions with missing entryPx" do
+        allow(mock_client).to receive(:user_state).and_return(positions_with_missing_entry_px)
+        allow(Rails.logger).to receive(:warn)
+
+        manager.sync_from_hyperliquid
+
+        expect(Rails.logger).to have_received(:warn).with(/missing entryPx for BTC/i)
+      end
+
+      it "skips positions with missing coin symbol without crashing" do
+        allow(mock_client).to receive(:user_state).and_return(positions_with_missing_coin)
+
+        expect { manager.sync_from_hyperliquid }.not_to raise_error
+        expect(Position.count).to eq(0) # No positions created
+      end
+
+      it "skips positions with nil szi (size) gracefully" do
+        positions = {
+          "assetPositions" => [
+            {
+              "position" => {
+                "coin" => "BTC",
+                "szi" => nil,
+                "entryPx" => "100000.0"
+              }
+            }
+          ]
+        }
+        allow(mock_client).to receive(:user_state).and_return(positions)
+
+        expect { manager.sync_from_hyperliquid }.not_to raise_error
+        expect(Position.count).to eq(0) # Position skipped due to zero size
+      end
+    end
   end
 
   describe "#find_or_create_position" do

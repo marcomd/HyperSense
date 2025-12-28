@@ -81,7 +81,11 @@ module Execution
         end
 
         size = decision.target_position || Settings.risk.max_position_size
-        price = fetch_current_price(decision.symbol)
+        begin
+          price = fetch_current_price(decision.symbol)
+        rescue StandardError => e
+          return { valid: false, reason: "Failed to fetch price: #{e.message}" }
+        end
         leverage = decision.leverage || Settings.risk.default_leverage
         margin_required = @account_manager.margin_for_position(
           size: size, price: price, leverage: leverage

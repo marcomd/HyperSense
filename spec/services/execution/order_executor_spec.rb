@@ -272,5 +272,30 @@ RSpec.describe Execution::OrderExecutor do
       expect(result[:valid]).to be false
       expect(result[:reason].downcase).to include("confidence")
     end
+
+    # Regression test for price fetch failure (v0.13.1)
+    context "when price fetch fails during validation" do
+      let(:decision) { build(:trading_decision, symbol: "BTC", operation: "open", confidence: 0.8) }
+
+      it "returns failure instead of crashing when price unavailable" do
+        allow(mock_client).to receive(:all_mids).and_return({}) # No price for BTC
+
+        result = executor.send(:validate_decision, decision)
+
+        expect(result[:valid]).to be false
+        expect(result[:reason]).to include("Failed to fetch price")
+      end
+
+      it "handles API errors gracefully" do
+        allow(mock_client).to receive(:all_mids)
+          .and_raise(Execution::HyperliquidClient::HyperliquidApiError.new("API timeout"))
+
+        result = executor.send(:validate_decision, decision)
+
+        expect(result[:valid]).to be false
+        expect(result[:reason]).to include("Failed to fetch price")
+        expect(result[:reason]).to include("API timeout")
+      end
+    end
   end
 end

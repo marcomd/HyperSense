@@ -2,6 +2,52 @@
 
 All notable changes to HyperSense.
 
+## [0.13.4] - 2025-12-28
+
+### Changed
+- **Database Configuration via Environment Variables** - Moved database settings from hardcoded values to `.env` file
+  - `DATABASE_URL` (and `_CACHE_URL`, `_QUEUE_URL`, `_CABLE_URL`) takes priority when set for remote databases
+  - Individual env vars (`DATABASE_HOST`, `DATABASE_PORT`, `DATABASE_USER`, `DATABASE_PASSWORD`, `DATABASE_DATABASE`) as fallback
+  - Default port changed to `5433` to match docker-compose configuration
+  - Production requires env vars (no hardcoded defaults for security)
+
+### Updated
+- `config/database.yml` - Now uses ERB with `ENV.fetch` and sensible defaults
+- `.env.example` - Added database configuration section with documented options
+- `README.md` - Updated setup instructions with database configuration details
+
+### Technical Details
+- Multi-database setup preserved (primary, cache, queue, cable)
+- Test environment uses `DATABASE_TEST_*` vars or defaults with `_test` suffix
+- Seamless migration: existing Docker setups work without changes
+
+## [0.13.3] - 2025-12-28
+
+### Fixed
+- **PositionManager Nil Crash** - `sync_from_hyperliquid` was crashing with `NoMethodError: undefined method 'to_d' for nil`
+  - Added nil validation for `entryPx` field before processing positions
+  - Added nil check for `coin` (symbol) field
+  - Added safe navigation (`&.`) for `szi` (size) field
+  - Positions with missing required data are now skipped with a warning log
+
+- **OrderExecutor Price Fetch Crash** - `validate_decision` was crashing when price fetch failed
+  - Wrapped `fetch_current_price` in error handling during validation
+  - Returns graceful rejection instead of crashing the job
+
+- **TradingCycle Error Handling** - `sync_positions_if_configured` only caught `HyperliquidApiError`
+  - Now catches all `StandardError` to prevent `NoMethodError` from crashing the cycle
+  - Logs error class name for better debugging
+
+### Added
+- **Regression Tests** - Specs to prevent these issues from recurring
+  - `position_manager_spec.rb` - 4 new examples for nil handling (missing entryPx, missing coin, nil size)
+  - `order_executor_spec.rb` - 2 new examples for price fetch failure handling
+
+### Technical Details
+- Root cause: Inconsistent use of safe navigation operators (`&.`) in PositionManager
+- Line 52 had `pos_data["entryPx"].to_d` while lines 53, 55, 56 correctly used `&.to_d`
+- Crash occurred every 5 minutes when TradingCycleJob called `sync_positions_if_configured`
+
 ## [0.13.2] - 2025-12-28
 
 ### Added

@@ -1,6 +1,6 @@
 # HyperSense
 
-**Version 0.13.2** | Autonomous AI Trading Agent for cryptocurrency markets.
+**Version 0.13.4** | Autonomous AI Trading Agent for cryptocurrency markets.
 
 ![HyperSense_cover1.jpg](docs/HyperSense_cover1.jpg)
 
@@ -217,13 +217,15 @@ HyperSense/
 3. **Configure environment variables**
    ```bash
    cp .env.example .env
-   # Edit .env to customize LLM_MODEL and add Hyperliquid credentials
+   # Edit .env to customize database settings, LLM_MODEL and add Hyperliquid credentials
    ```
 
-4. **Start PostgreSQL** (uses port 5433 to avoid conflicts)
+4. **Start PostgreSQL** (uses port 5433 to avoid conflicts with local PostgreSQL)
    ```bash
    docker compose up -d
    ```
+
+   The default `.env` settings connect to the Docker PostgreSQL container automatically.
 
 5. **Setup database**
    ```bash
@@ -233,6 +235,15 @@ HyperSense/
 
 6. **Configure API keys** (edit `.env` file created in step 3)
    ```bash
+   # Database (defaults work with docker-compose)
+   DATABASE_HOST=localhost
+   DATABASE_PORT=5433
+   DATABASE_USER=hypersense
+   DATABASE_PASSWORD=hypersense_dev
+
+   # For remote databases, use DATABASE_URL instead:
+   # DATABASE_URL=postgresql://user:password@host:5432/hypersense
+
    # Required: Anthropic API key for AI reasoning
    ANTHROPIC_API_KEY=your_anthropic_api_key
 

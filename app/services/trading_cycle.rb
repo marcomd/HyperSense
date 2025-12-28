@@ -85,8 +85,8 @@ class TradingCycle
     @logger.info "[TradingCycle] Syncing positions from Hyperliquid..."
     @position_manager.sync_from_hyperliquid
     @position_manager.update_prices
-  rescue Execution::HyperliquidClient::HyperliquidApiError => e
-    @logger.warn "[TradingCycle] Position sync failed: #{e.message}"
+  rescue StandardError => e
+    @logger.warn "[TradingCycle] Position sync failed: #{e.class} - #{e.message}"
   end
 
   # Ensure we have a valid macro strategy, refresh if needed

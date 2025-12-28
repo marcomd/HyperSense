@@ -1,84 +1,159 @@
 # PostgreSQL configuration for HyperSense
 # Multi-database setup: primary, cache, queue, cable
+#
+# Priority order for connection settings:
+# 1. DATABASE_URL / DATABASE_*_URL (full connection string)
+# 2. Individual env vars (DATABASE_HOST, DATABASE_PORT, etc.)
+# 3. Default values (for local Docker development)
 
 default: &default
   adapter: postgresql
   encoding: unicode
   pool: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
-  host: localhost
-  port: 5432
 
 development:
   primary:
     <<: *default
-    database: hypersense_development
-    username: hypersense
-    password: hypersense_dev
+<% if ENV["DATABASE_URL"] %>
+    url: <%= ENV["DATABASE_URL"] %>
+<% else %>
+    host: <%= ENV.fetch("DATABASE_HOST", "localhost") %>
+    port: <%= ENV.fetch("DATABASE_PORT", "5433") %>
+    database: <%= ENV.fetch("DATABASE_DATABASE", "hypersense_development") %>
+    username: <%= ENV.fetch("DATABASE_USER", "hypersense") %>
+    password: <%= ENV.fetch("DATABASE_PASSWORD", "hypersense_dev") %>
+<% end %>
   cache:
     <<: *default
-    database: hypersense_development_cache
-    username: hypersense
-    password: hypersense_dev
+<% if ENV["DATABASE_CACHE_URL"] %>
+    url: <%= ENV["DATABASE_CACHE_URL"] %>
+<% else %>
+    host: <%= ENV.fetch("DATABASE_HOST", "localhost") %>
+    port: <%= ENV.fetch("DATABASE_PORT", "5433") %>
+    database: <%= ENV.fetch("DATABASE_CACHE_DATABASE", "hypersense_development_cache") %>
+    username: <%= ENV.fetch("DATABASE_USER", "hypersense") %>
+    password: <%= ENV.fetch("DATABASE_PASSWORD", "hypersense_dev") %>
+<% end %>
     migrations_paths: db/cache_migrate
   queue:
     <<: *default
-    database: hypersense_development_queue
-    username: hypersense
-    password: hypersense_dev
+<% if ENV["DATABASE_QUEUE_URL"] %>
+    url: <%= ENV["DATABASE_QUEUE_URL"] %>
+<% else %>
+    host: <%= ENV.fetch("DATABASE_HOST", "localhost") %>
+    port: <%= ENV.fetch("DATABASE_PORT", "5433") %>
+    database: <%= ENV.fetch("DATABASE_QUEUE_DATABASE", "hypersense_development_queue") %>
+    username: <%= ENV.fetch("DATABASE_USER", "hypersense") %>
+    password: <%= ENV.fetch("DATABASE_PASSWORD", "hypersense_dev") %>
+<% end %>
     migrations_paths: db/queue_migrate
   cable:
     <<: *default
-    database: hypersense_development_cable
-    username: hypersense
-    password: hypersense_dev
+<% if ENV["DATABASE_CABLE_URL"] %>
+    url: <%= ENV["DATABASE_CABLE_URL"] %>
+<% else %>
+    host: <%= ENV.fetch("DATABASE_HOST", "localhost") %>
+    port: <%= ENV.fetch("DATABASE_PORT", "5433") %>
+    database: <%= ENV.fetch("DATABASE_CABLE_DATABASE", "hypersense_development_cable") %>
+    username: <%= ENV.fetch("DATABASE_USER", "hypersense") %>
+    password: <%= ENV.fetch("DATABASE_PASSWORD", "hypersense_dev") %>
+<% end %>
     migrations_paths: db/cable_migrate
 
 test:
   primary:
     <<: *default
-    database: hypersense_test
-    username: hypersense
-    password: hypersense_dev
+<% if ENV["DATABASE_TEST_URL"] %>
+    url: <%= ENV["DATABASE_TEST_URL"] %>
+<% else %>
+    host: <%= ENV.fetch("DATABASE_HOST", "localhost") %>
+    port: <%= ENV.fetch("DATABASE_PORT", "5433") %>
+    database: <%= ENV.fetch("DATABASE_TEST_DATABASE", "hypersense_test") %>
+    username: <%= ENV.fetch("DATABASE_USER", "hypersense") %>
+    password: <%= ENV.fetch("DATABASE_PASSWORD", "hypersense_dev") %>
+<% end %>
   cache:
     <<: *default
-    database: hypersense_test_cache
-    username: hypersense
-    password: hypersense_dev
+<% if ENV["DATABASE_TEST_CACHE_URL"] %>
+    url: <%= ENV["DATABASE_TEST_CACHE_URL"] %>
+<% else %>
+    host: <%= ENV.fetch("DATABASE_HOST", "localhost") %>
+    port: <%= ENV.fetch("DATABASE_PORT", "5433") %>
+    database: <%= ENV.fetch("DATABASE_TEST_CACHE_DATABASE", "hypersense_test_cache") %>
+    username: <%= ENV.fetch("DATABASE_USER", "hypersense") %>
+    password: <%= ENV.fetch("DATABASE_PASSWORD", "hypersense_dev") %>
+<% end %>
     migrations_paths: db/cache_migrate
   queue:
     <<: *default
-    database: hypersense_test_queue
-    username: hypersense
-    password: hypersense_dev
+<% if ENV["DATABASE_TEST_QUEUE_URL"] %>
+    url: <%= ENV["DATABASE_TEST_QUEUE_URL"] %>
+<% else %>
+    host: <%= ENV.fetch("DATABASE_HOST", "localhost") %>
+    port: <%= ENV.fetch("DATABASE_PORT", "5433") %>
+    database: <%= ENV.fetch("DATABASE_TEST_QUEUE_DATABASE", "hypersense_test_queue") %>
+    username: <%= ENV.fetch("DATABASE_USER", "hypersense") %>
+    password: <%= ENV.fetch("DATABASE_PASSWORD", "hypersense_dev") %>
+<% end %>
     migrations_paths: db/queue_migrate
   cable:
     <<: *default
-    database: hypersense_test_cable
-    username: hypersense
-    password: hypersense_dev
+<% if ENV["DATABASE_TEST_CABLE_URL"] %>
+    url: <%= ENV["DATABASE_TEST_CABLE_URL"] %>
+<% else %>
+    host: <%= ENV.fetch("DATABASE_HOST", "localhost") %>
+    port: <%= ENV.fetch("DATABASE_PORT", "5433") %>
+    database: <%= ENV.fetch("DATABASE_TEST_CABLE_DATABASE", "hypersense_test_cable") %>
+    username: <%= ENV.fetch("DATABASE_USER", "hypersense") %>
+    password: <%= ENV.fetch("DATABASE_PASSWORD", "hypersense_dev") %>
+<% end %>
     migrations_paths: db/cable_migrate
 
 production:
   primary:
     <<: *default
-    database: hypersense_production
-    username: hypersense
-    password: <%= ENV["HYPERSENSE_DATABASE_PASSWORD"] %>
+<% if ENV["DATABASE_URL"] %>
+    url: <%= ENV["DATABASE_URL"] %>
+<% else %>
+    host: <%= ENV.fetch("DATABASE_HOST") %>
+    port: <%= ENV.fetch("DATABASE_PORT", "5432") %>
+    database: <%= ENV.fetch("DATABASE_DATABASE", "hypersense_production") %>
+    username: <%= ENV.fetch("DATABASE_USER") %>
+    password: <%= ENV.fetch("DATABASE_PASSWORD") %>
+<% end %>
   cache:
     <<: *default
-    database: hypersense_production_cache
-    username: hypersense
-    password: <%= ENV["HYPERSENSE_DATABASE_PASSWORD"] %>
+<% if ENV["DATABASE_CACHE_URL"] %>
+    url: <%= ENV["DATABASE_CACHE_URL"] %>
+<% else %>
+    host: <%= ENV.fetch("DATABASE_HOST") %>
+    port: <%= ENV.fetch("DATABASE_PORT", "5432") %>
+    database: <%= ENV.fetch("DATABASE_CACHE_DATABASE", "hypersense_production_cache") %>
+    username: <%= ENV.fetch("DATABASE_USER") %>
+    password: <%= ENV.fetch("DATABASE_PASSWORD") %>
+<% end %>
     migrations_paths: db/cache_migrate
   queue:
     <<: *default
-    database: hypersense_production_queue
-    username: hypersense
-    password: <%= ENV["HYPERSENSE_DATABASE_PASSWORD"] %>
+<% if ENV["DATABASE_QUEUE_URL"] %>
+    url: <%= ENV["DATABASE_QUEUE_URL"] %>
+<% else %>
+    host: <%= ENV.fetch("DATABASE_HOST") %>
+    port: <%= ENV.fetch("DATABASE_PORT", "5432") %>
+    database: <%= ENV.fetch("DATABASE_QUEUE_DATABASE", "hypersense_production_queue") %>
+    username: <%= ENV.fetch("DATABASE_USER") %>
+    password: <%= ENV.fetch("DATABASE_PASSWORD") %>
+<% end %>
     migrations_paths: db/queue_migrate
   cable:
     <<: *default
-    database: hypersense_production_cable
-    username: hypersense
-    password: <%= ENV["HYPERSENSE_DATABASE_PASSWORD"] %>
+<% if ENV["DATABASE_CABLE_URL"] %>
+    url: <%= ENV["DATABASE_CABLE_URL"] %>
+<% else %>
+    host: <%= ENV.fetch("DATABASE_HOST") %>
+    port: <%= ENV.fetch("DATABASE_PORT", "5432") %>
+    database: <%= ENV.fetch("DATABASE_CABLE_DATABASE", "hypersense_production_cable") %>
+    username: <%= ENV.fetch("DATABASE_USER") %>
+    password: <%= ENV.fetch("DATABASE_PASSWORD") %>
+<% end %>
     migrations_paths: db/cable_migrate

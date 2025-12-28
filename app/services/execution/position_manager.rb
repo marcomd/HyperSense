@@ -32,9 +32,23 @@ module Execution
         next unless pos_data
 
         symbol = pos_data["coin"]
+        next unless symbol # Skip if no symbol
+
+        # Validate entry price is present (required field)
+        entry_px = pos_data["entryPx"]
+        if entry_px.nil?
+          @logger.warn "[PositionManager] Skipping position - missing entryPx for #{symbol}"
+          next
+        end
+
+        size = pos_data["szi"]&.to_d || 0
+        if size.zero?
+          @logger.warn "[PositionManager] Skipping position - zero size for #{symbol}"
+          next
+        end
+
         synced_symbols << symbol
 
-        size = pos_data["szi"].to_d
         direction = size.positive? ? "long" : "short"
         size = size.abs
 
@@ -49,7 +63,7 @@ module Execution
         position.assign_attributes(
           direction: direction,
           size: size,
-          entry_price: pos_data["entryPx"].to_d,
+          entry_price: entry_px.to_d,
           current_price: pos_data["markPx"]&.to_d,
           unrealized_pnl: pos_data["unrealizedPnl"]&.to_d || 0,
           liquidation_price: pos_data["liquidationPx"]&.to_d,
