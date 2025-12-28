@@ -12,12 +12,24 @@ module Reasoning
     def self.temperature = Settings.llm.low_level.temperature
 
     SYSTEM_PROMPT = <<~PROMPT
-      # Financial analysis of the crypto market      
-      
+      # Financial analysis of the crypto market
+
       ## Role
       You are a cryptocurrency trade execution specialist for an autonomous trading system.
       Your role is to make specific trading decisions based on current market conditions.
       It is extremely important to provide accurate and decisive guidance because the savings of many people depend on these decisions.
+
+      ## Position Awareness
+      You will receive information about whether a position already exists for this symbol.
+      - If NO position exists (has_position: false): You can only choose "open" or "hold"
+      - If a position EXISTS (has_position: true): You can choose "close" or "hold" (NOT "open")
+
+      Decision logic:
+      - NO position + bullish signal aligned with macro bias = "open" long
+      - NO position + bearish signal aligned with macro bias = "open" short
+      - NO position + unclear signals = "hold" (wait for better setup)
+      - HAS position + target reached OR stop-loss near OR trend reversal = "close"
+      - HAS position + trend continues in favorable direction = "hold"
 
       ## Input Weighting System
       You will receive data with assigned weights indicating their importance in your decision:
@@ -30,13 +42,14 @@ module Reasoning
       If forecast data is unavailable, redistribute its weight to other available sources.
 
       ## Decision Framework
-      1. Start with FORECAST signals (if available) as primary direction indicator
-      2. Confirm with SENTIMENT data (Fear & Greed, news)
-      3. Validate entry timing using TECHNICAL indicators
-      4. Consider WHALE_ALERTS for potential sudden moves
-      5. Set appropriate stop-loss and take-profit levels
+      1. Check CURRENT POSITION STATUS first - this determines available operations
+      2. Start with FORECAST signals (if available) as primary direction indicator
+      3. Confirm with SENTIMENT data (Fear & Greed, news)
+      4. Validate entry timing using TECHNICAL indicators
+      5. Consider WHALE_ALERTS for potential sudden moves
+      6. Set appropriate stop-loss and take-profit levels (for open operations)
 
-      ## Output JSON schema for OPEN action:
+      ## Output JSON schema for OPEN action (only when NO position exists):
       {
         "operation": "open",
         "symbol": "BTC" | "ETH" | "SOL" | "BNB",
@@ -49,6 +62,14 @@ module Reasoning
         "reasoning": "string - concise explanation referencing weighted inputs"
       }
 
+      ## Output JSON schema for CLOSE action (only when position EXISTS):
+      {
+        "operation": "close",
+        "symbol": "BTC" | "ETH" | "SOL" | "BNB",
+        "confidence": number (0.6 to 1.0),
+        "reasoning": "string - explanation for closing (e.g., take profit, stop loss, trend reversal)"
+      }
+
       ## Output JSON schema for HOLD action:
       {
         "operation": "hold",
@@ -58,8 +79,16 @@ module Reasoning
       }
 
       ## Rules:
-      - ONLY suggest "open" if you see a clear opportunity aligned with macro bias
+      - Check if a position exists FIRST before deciding on operation
+      - If NO position: Only "open" or "hold" are valid operations
+      - If position EXISTS: Only "close" or "hold" are valid (cannot open another position)
+      - ONLY suggest "open" if you see a clear opportunity aligned with macro bias AND no position exists
       - "hold" is the default when conditions are unclear or no edge exists
+      - "close" should be used when:
+        - Take-profit target is approaching (within 2%)
+        - Stop-loss is at risk (price moving against position)
+        - Trend has reversed against the position direction
+        - Market conditions have significantly changed
       - Confidence < 0.6 should result in "hold"
       - Stop-loss is REQUIRED for any "open" operation
       - Respect max leverage from risk parameters
@@ -118,6 +147,9 @@ module Reasoning
 
         ## Current Time
         #{context[:timestamp]}
+
+        ## Current Position Status
+        #{format_position(context[:current_position])}
 
         ## Input Weights (prioritize accordingly)
         #{format_weights(weights)}
@@ -185,6 +217,24 @@ module Reasoning
 
     def format_weights(weights)
       weights.map { |k, v| "- #{k.to_s.upcase}: #{v}" }.join("\n")
+    end
+
+    def format_position(position)
+      return "NO POSITION - You can OPEN a new position or HOLD" unless position&.dig(:has_position)
+
+      <<~POS.strip
+        ACTIVE #{position[:direction].upcase} POSITION:
+        - Size: #{position[:size]}
+        - Entry Price: $#{format_number(position[:entry_price])}
+        - Current Price: $#{format_number(position[:current_price])}
+        - Unrealized PnL: $#{format_number(position[:unrealized_pnl])} (#{format_number(position[:pnl_percent])}%)
+        - Leverage: #{position[:leverage]}x
+        - Stop Loss: #{position[:stop_loss_price] ? "$#{format_number(position[:stop_loss_price])}" : "Not set"}
+        - Take Profit: #{position[:take_profit_price] ? "$#{format_number(position[:take_profit_price])}" : "Not set"}
+        - Opened: #{position[:opened_at]}
+
+        ACTION OPTIONS: You can CLOSE this position or HOLD (cannot OPEN another)
+      POS
     end
 
     def format_forecast(forecast)

@@ -2,6 +2,31 @@
 
 All notable changes to HyperSense.
 
+## [0.12.0] - 2025-12-28
+
+### Added
+- **Position Awareness for LLM Trading Agent** - The LLM now receives information about existing positions when making trading decisions
+  - `ContextAssembler#current_position_for` - Returns position data (direction, size, entry_price, current_price, unrealized_pnl, leverage, stop_loss, take_profit) or `has_position: false`
+  - `LowLevelAgent#format_position` - Formats position status for the LLM prompt
+  - **CLOSE operation** - LLM can now decide to close existing positions based on market conditions
+
+### Changed
+- `Reasoning::ContextAssembler` now includes `current_position` in trading context
+- `Reasoning::LowLevelAgent` system prompt updated with:
+  - **Position Awareness** section explaining available operations based on position state
+  - **Decision logic** for open/close/hold based on position existence
+  - **CLOSE action** output JSON schema
+  - Updated **Rules** clarifying position-aware operation constraints
+- User prompt now includes `## Current Position Status` section before market data
+
+### Fixed
+- **Phantom Position Bug** - When trades failed to execute (e.g., insufficient margin), the LLM would incorrectly say "hold" on non-existent positions. Now the LLM explicitly sees whether a position exists and can decide to open if market conditions warrant.
+
+### Technical Details
+- 20 new tests across `context_assembler_spec.rb` and `low_level_agent_spec.rb`
+- 254 service tests passing, RuboCop clean
+- No changes to `OrderExecutor` or `DecisionParser` (already support "close" operation)
+
 ## [0.11.0] - 2025-12-28
 
 ### Fixed

@@ -210,4 +210,108 @@ RSpec.describe Reasoning::ContextAssembler do
       )
     end
   end
+
+  describe "position awareness" do
+    subject(:assembler) { described_class.new(symbol: "BTC") }
+
+    context "when no open position exists" do
+      it "includes current_position in context" do
+        context = assembler.for_trading(macro_strategy: macro_strategy)
+
+        expect(context).to include(:current_position)
+      end
+
+      it "returns has_position: false" do
+        context = assembler.for_trading(macro_strategy: macro_strategy)
+
+        expect(context[:current_position][:has_position]).to be false
+      end
+    end
+
+    context "when an open position exists" do
+      let!(:open_position) do
+        create(:position,
+          symbol: "BTC",
+          direction: "long",
+          size: 0.05,
+          entry_price: 95_000,
+          current_price: 97_000,
+          unrealized_pnl: 100,
+          leverage: 5,
+          stop_loss_price: 93_000,
+          take_profit_price: 100_000,
+          opened_at: 1.hour.ago)
+      end
+
+      it "returns has_position: true" do
+        context = assembler.for_trading(macro_strategy: macro_strategy)
+
+        expect(context[:current_position][:has_position]).to be true
+      end
+
+      it "includes direction" do
+        context = assembler.for_trading(macro_strategy: macro_strategy)
+
+        expect(context[:current_position][:direction]).to eq("long")
+      end
+
+      it "includes size" do
+        context = assembler.for_trading(macro_strategy: macro_strategy)
+
+        expect(context[:current_position][:size]).to eq(0.05)
+      end
+
+      it "includes entry and current price" do
+        context = assembler.for_trading(macro_strategy: macro_strategy)
+
+        expect(context[:current_position][:entry_price]).to eq(95_000.0)
+        expect(context[:current_position][:current_price]).to eq(97_000.0)
+      end
+
+      it "includes unrealized PnL" do
+        context = assembler.for_trading(macro_strategy: macro_strategy)
+
+        expect(context[:current_position][:unrealized_pnl]).to eq(100.0)
+      end
+
+      it "includes leverage" do
+        context = assembler.for_trading(macro_strategy: macro_strategy)
+
+        expect(context[:current_position][:leverage]).to eq(5)
+      end
+
+      it "includes stop loss and take profit prices" do
+        context = assembler.for_trading(macro_strategy: macro_strategy)
+
+        expect(context[:current_position][:stop_loss_price]).to eq(93_000.0)
+        expect(context[:current_position][:take_profit_price]).to eq(100_000.0)
+      end
+
+      it "includes opened_at timestamp" do
+        context = assembler.for_trading(macro_strategy: macro_strategy)
+
+        expect(context[:current_position][:opened_at]).to be_present
+      end
+    end
+
+    context "when a closed position exists but no open position" do
+      let!(:closed_position) { create(:position, :closed, symbol: "BTC") }
+
+      it "returns has_position: false" do
+        context = assembler.for_trading(macro_strategy: macro_strategy)
+
+        expect(context[:current_position][:has_position]).to be false
+      end
+    end
+
+    context "when position exists for different symbol" do
+      let!(:eth_position) { create(:position, :eth, symbol: "ETH") }
+
+      it "returns has_position: false for BTC" do
+        context = assembler.for_trading(macro_strategy: macro_strategy)
+
+        expect(context[:current_position][:has_position]).to be false
+      end
+    end
+  end
 end

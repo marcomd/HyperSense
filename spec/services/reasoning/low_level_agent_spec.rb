@@ -194,6 +194,115 @@ RSpec.describe Reasoning::LowLevelAgent do
         expect(decision.rejection_reason).to include("Connection failed")
       end
     end
+
+    context "with close decision response" do
+      let!(:open_position) do
+        create(:position,
+          symbol: "BTC",
+          direction: "long",
+          size: 0.05,
+          entry_price: 95_000,
+          current_price: 100_000,
+          unrealized_pnl: 250,
+          leverage: 5)
+      end
+
+      let(:close_decision_response) do
+        {
+          operation: "close",
+          symbol: "BTC",
+          confidence: 0.85,
+          reasoning: "Take profit target reached, securing gains"
+        }.to_json
+      end
+
+      before do
+        allow_any_instance_of(Anthropic::Client).to receive_message_chain(:messages, :create).and_return(
+          OpenStruct.new(
+            content: [ OpenStruct.new(text: close_decision_response) ]
+          )
+        )
+      end
+
+      it "creates a close decision" do
+        decision = agent.decide(symbol: "BTC", macro_strategy: macro_strategy)
+        expect(decision.operation).to eq("close")
+      end
+
+      it "sets the confidence" do
+        decision = agent.decide(symbol: "BTC", macro_strategy: macro_strategy)
+        expect(decision.confidence).to eq(0.85)
+      end
+
+      it "is actionable" do
+        decision = agent.decide(symbol: "BTC", macro_strategy: macro_strategy)
+        expect(decision.actionable?).to be true
+      end
+
+      it "stores the context with position data" do
+        decision = agent.decide(symbol: "BTC", macro_strategy: macro_strategy)
+        expect(decision.context_sent["current_position"]["has_position"]).to be true
+        expect(decision.context_sent["current_position"]["direction"]).to eq("long")
+      end
+    end
+
+    context "position awareness in context" do
+      let(:hold_response) do
+        {
+          operation: "hold",
+          symbol: "BTC",
+          confidence: 0.5,
+          reasoning: "No clear setup"
+        }.to_json
+      end
+
+      before do
+        allow_any_instance_of(Anthropic::Client).to receive_message_chain(:messages, :create).and_return(
+          OpenStruct.new(
+            content: [ OpenStruct.new(text: hold_response) ]
+          )
+        )
+      end
+
+      context "without open position" do
+        it "includes current_position in context_sent" do
+          decision = agent.decide(symbol: "BTC", macro_strategy: macro_strategy)
+          expect(decision.context_sent).to include("current_position")
+        end
+
+        it "has has_position: false when no position exists" do
+          decision = agent.decide(symbol: "BTC", macro_strategy: macro_strategy)
+          expect(decision.context_sent["current_position"]["has_position"]).to be false
+        end
+      end
+
+      context "with open position" do
+        let!(:open_position) do
+          create(:position,
+            symbol: "BTC",
+            direction: "short",
+            size: 0.03,
+            entry_price: 100_000,
+            current_price: 97_000,
+            unrealized_pnl: 90,
+            leverage: 3)
+        end
+
+        it "has has_position: true when position exists" do
+          decision = agent.decide(symbol: "BTC", macro_strategy: macro_strategy)
+          expect(decision.context_sent["current_position"]["has_position"]).to be true
+        end
+
+        it "includes position details in context" do
+          decision = agent.decide(symbol: "BTC", macro_strategy: macro_strategy)
+          position_data = decision.context_sent["current_position"]
+          expect(position_data["direction"]).to eq("short")
+          expect(position_data["size"]).to eq(0.03)
+          expect(position_data["entry_price"]).to eq(100_000.0)
+          expect(position_data["leverage"]).to eq(3)
+        end
+      end
+    end
   end
 
   describe "#decide_all" do

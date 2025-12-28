@@ -16,6 +16,7 @@ module Reasoning
     # @param symbol [String, nil] Asset symbol for single-asset context
     def initialize(symbol: nil)
       @symbol = symbol
+      @position_manager = Execution::PositionManager.new
     end
 
     # Assemble context for low-level agent (trade decisions)
@@ -26,6 +27,8 @@ module Reasoning
         timestamp: Time.current.iso8601,
         symbol: @symbol,
         weights: context_weights,
+        # Position awareness
+        current_position: current_position_for(@symbol),
         # Weighted data sources
         forecast: forecast_for(@symbol),
         news: recent_news,
@@ -307,6 +310,28 @@ module Reasoning
         max_leverage: Settings.risk.max_leverage,
         default_leverage: Settings.risk.default_leverage,
         max_open_positions: Settings.risk.max_open_positions
+      }
+    end
+
+    # Get current position information for a symbol
+    # @param symbol [String] Asset symbol
+    # @return [Hash] Position data or indication of no position
+    def current_position_for(symbol)
+      position = @position_manager.get_open_position(symbol)
+      return { has_position: false } unless position
+
+      {
+        has_position: true,
+        direction: position.direction,
+        size: position.size.to_f,
+        entry_price: position.entry_price.to_f,
+        current_price: position.current_price.to_f,
+        unrealized_pnl: position.unrealized_pnl.to_f,
+        pnl_percent: position.pnl_percent,
+        leverage: position.leverage,
+        stop_loss_price: position.stop_loss_price&.to_f,
+        take_profit_price: position.take_profit_price&.to_f,
+        opened_at: position.opened_at&.iso8601
       }
     end
   end
