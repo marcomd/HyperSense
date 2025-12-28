@@ -48,6 +48,16 @@ class MarketSnapshotJob < ApplicationJob
 
   private
 
+  # Create a market snapshot for a single asset
+  #
+  # Fetches current price, calculates technical indicators, and persists to database.
+  #
+  # @param asset [String] Asset symbol (e.g., "BTC")
+  # @param price_fetcher [DataIngestion::PriceFetcher] Price data fetcher
+  # @param indicator_calculator [Indicators::Calculator] Technical indicator calculator
+  # @param sentiment [Hash] Sentiment data to attach to snapshot
+  # @param captured_at [Time] Timestamp for the snapshot
+  # @return [MarketSnapshot, nil] Created snapshot or nil on failure
   def create_snapshot(asset:, price_fetcher:, indicator_calculator:, sentiment:, captured_at:)
     # Fetch current ticker data
     ticker = price_fetcher.fetch_ticker(asset)
@@ -79,6 +89,12 @@ class MarketSnapshotJob < ApplicationJob
     snapshot
   end
 
+  # Broadcast snapshot updates via WebSocket channels
+  #
+  # Sends updates to both MarketsChannel (per-symbol) and DashboardChannel (aggregated).
+  #
+  # @param snapshots [Array<MarketSnapshot>] Snapshots to broadcast
+  # @return [void]
   def broadcast_updates(snapshots)
     # Broadcast via MarketsChannel for price updates
     MarketsChannel.broadcast_snapshots(snapshots)

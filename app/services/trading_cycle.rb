@@ -10,7 +10,15 @@
 # 5. Filter and approve decisions (using RiskManager)
 # 6. Execute approved trades
 #
+# @example
+#   cycle = TradingCycle.new
+#   decisions = cycle.execute
+#   # => [TradingDecision(BTC, hold), TradingDecision(ETH, open)]
+#
 class TradingCycle
+  # Initialize the trading cycle with all required dependencies
+  #
+  # @return [TradingCycle] A new instance of TradingCycle
   def initialize
     @logger = Rails.logger
     @position_manager = Execution::PositionManager.new
@@ -22,7 +30,11 @@ class TradingCycle
   end
 
   # Execute the full trading cycle
-  # @return [Array<TradingDecision>] Array of decisions made
+  #
+  # @return [Array<TradingDecision>] Array of decisions made (empty if circuit breaker active)
+  # @example
+  #   cycle.execute
+  #   # => [#<TradingDecision symbol: "BTC", operation: "hold", confidence: 0.45>]
   def execute
     @logger.info "[TradingCycle] Starting execution..."
 
@@ -61,6 +73,11 @@ class TradingCycle
   private
 
   # Sync positions from Hyperliquid if client is configured
+  #
+  # Fetches current positions from the exchange and updates local database.
+  # Silently handles API errors to avoid disrupting the trading cycle.
+  #
+  # @return [void]
   def sync_positions_if_configured
     client = Execution::HyperliquidClient.new
     return unless client.configured?
@@ -73,6 +90,11 @@ class TradingCycle
   end
 
   # Ensure we have a valid macro strategy, refresh if needed
+  #
+  # Checks if the current macro strategy is stale or missing and triggers
+  # a synchronous refresh via MacroStrategyJob if necessary.
+  #
+  # @return [void]
   def ensure_macro_strategy
     return unless MacroStrategy.needs_refresh?
 
@@ -170,8 +192,10 @@ class TradingCycle
     log_execution_summary(approved_decisions)
   end
 
-  # Log execution results
+  # Log execution results summary
+  #
   # @param decisions [Array<TradingDecision>] Executed decisions
+  # @return [void]
   def log_execution_summary(decisions)
     executed = decisions.count(&:executed?)
     failed = decisions.count { |d| d.status == "failed" }
@@ -183,8 +207,12 @@ class TradingCycle
     end
   end
 
-  # Get current portfolio state
-  # @return [Hash] Portfolio state
+  # Get current portfolio state including open positions and PnL
+  #
+  # @return [Hash] Portfolio state with keys :positions, :open_count, :total_unrealized_pnl
+  # @example
+  #   current_portfolio
+  #   # => { positions: [Position], open_count: 2, total_unrealized_pnl: 150.50 }
   def current_portfolio
     {
       positions: Position.open.to_a,

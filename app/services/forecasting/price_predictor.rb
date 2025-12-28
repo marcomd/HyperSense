@@ -145,16 +145,24 @@ module Forecasting
       end
     end
 
+    # Fetch the price at a specific target time
+    #
+    # Finds the closest snapshot within a 4-minute window around the target time.
+    # Uses parameterized SQL to avoid injection vulnerabilities.
+    #
+    # @param target_time [Time] The target timestamp to fetch price for
+    # @return [Float, nil] The price at that time, or nil if no snapshot found
     def fetch_price_at(target_time)
-      # Find the closest snapshot to the target time
-      snapshot = MarketSnapshot.for_symbol(@symbol)
-                               .where("captured_at >= ? AND captured_at <= ?",
-                                      target_time - 2.minutes,
-                                      target_time + 2.minutes)
-                               .order(Arel.sql("ABS(EXTRACT(EPOCH FROM (captured_at - '#{target_time.iso8601}')))"))
-                               .first
+      # Find the closest snapshot to the target time within a 4-minute window
+      snapshots = MarketSnapshot.for_symbol(@symbol)
+                                .where(captured_at: (target_time - 2.minutes)..(target_time + 2.minutes))
+                                .to_a
 
-      snapshot&.price&.to_f
+      return nil if snapshots.empty?
+
+      # Find the snapshot closest to target_time (in-memory sort to avoid SQL injection)
+      closest = snapshots.min_by { |s| (s.captured_at - target_time).abs }
+      closest&.price&.to_f
     end
   end
 end

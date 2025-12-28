@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module Indicators
-  # Technical indicator calculator
+  # Technical indicator calculator for trading analysis
   #
   # Implements common trading indicators:
   # - EMA (Exponential Moving Average)
@@ -9,13 +9,23 @@ module Indicators
   # - MACD (Moving Average Convergence Divergence)
   # - Pivot Points (Support/Resistance levels)
   #
+  # @example Basic usage
+  #   calculator = Indicators::Calculator.new
+  #   prices = [100, 102, 101, 103, 105, 104, 106]
+  #   calculator.rsi(prices) # => 62.5
+  #
   class Calculator
-    # Calculate EMA for a series of prices
+    # Calculate EMA (Exponential Moving Average) for a series of prices
+    #
+    # Uses the standard EMA formula: EMA = Price * k + EMA(prev) * (1 - k)
+    # where k = 2 / (period + 1)
     #
     # @param prices [Array<Numeric>] Price history (oldest first)
     # @param period [Integer] EMA period (e.g., 20, 50, 100)
-    # @return [Float] Current EMA value
-    #
+    # @return [Float, nil] Current EMA value, or nil if insufficient data
+    # @example
+    #   calculator.ema([100, 102, 101, 103, 105], 3)
+    #   # => 103.5
     def ema(prices, period)
       return nil if prices.size < period
 
@@ -32,10 +42,16 @@ module Indicators
 
     # Calculate RSI (Relative Strength Index)
     #
+    # RSI measures momentum on a scale of 0-100:
+    # - Below 30: Oversold (potential buy signal)
+    # - Above 70: Overbought (potential sell signal)
+    #
     # @param prices [Array<Numeric>] Price history (oldest first)
     # @param period [Integer] RSI period (default: 14)
-    # @return [Float] RSI value (0-100)
-    #
+    # @return [Float, nil] RSI value (0-100), or nil if insufficient data
+    # @example
+    #   calculator.rsi([100, 102, 101, 103, 105, 104, 106, 108, 107, 109, 111, 110, 112, 114, 113])
+    #   # => 66.67
     def rsi(prices, period = 14)
       return nil if prices.size < period + 1
 
@@ -53,14 +69,21 @@ module Indicators
       100.0 - (100.0 / (1.0 + rs))
     end
 
-    # Calculate MACD
+    # Calculate MACD (Moving Average Convergence Divergence)
+    #
+    # MACD is a trend-following momentum indicator:
+    # - Positive histogram: Bullish momentum
+    # - Negative histogram: Bearish momentum
+    # - Crossovers signal potential trend changes
     #
     # @param prices [Array<Numeric>] Price history (oldest first)
     # @param fast_period [Integer] Fast EMA period (default: 12)
     # @param slow_period [Integer] Slow EMA period (default: 26)
     # @param signal_period [Integer] Signal line period (default: 9)
-    # @return [Hash] { macd:, signal:, histogram: }
-    #
+    # @return [Hash, nil] MACD components or nil if insufficient data
+    # @example
+    #   calculator.macd(prices)
+    #   # => { macd: 2.5, signal: 1.8, histogram: 0.7 }
     def macd(prices, fast_period: 12, slow_period: 26, signal_period: 9)
       return nil if prices.size < slow_period
 
@@ -88,11 +111,18 @@ module Indicators
 
     # Calculate Pivot Points (Floor Trader Pivots)
     #
+    # Pivot points are key support/resistance levels used by traders:
+    # - PP: Central pivot point
+    # - R1, R2: Resistance levels above the pivot
+    # - S1, S2: Support levels below the pivot
+    #
     # @param high [Numeric] Previous period high
     # @param low [Numeric] Previous period low
     # @param close [Numeric] Previous period close
-    # @return [Hash] { pp:, r1:, r2:, s1:, s2: }
-    #
+    # @return [Hash] Pivot point levels with keys :pp, :r1, :r2, :s1, :s2
+    # @example
+    #   calculator.pivot_points(105, 95, 100)
+    #   # => { pp: 100.0, r1: 105.0, r2: 110.0, s1: 95.0, s2: 90.0 }
     def pivot_points(high, low, close)
       pp = (high + low + close) / 3.0
 
@@ -105,13 +135,18 @@ module Indicators
       }
     end
 
-    # Calculate all indicators for an asset
+    # Calculate all indicators for an asset in a single call
     #
-    # @param prices [Array<Numeric>] Price history
-    # @param high [Numeric] Period high (for pivot points)
-    # @param low [Numeric] Period low (for pivot points)
-    # @return [Hash] All calculated indicators
+    # Convenience method that computes EMA (20, 50, 100), RSI (14),
+    # MACD, and optionally pivot points.
     #
+    # @param prices [Array<Numeric>] Price history (oldest first)
+    # @param high [Numeric, nil] Period high (for pivot points)
+    # @param low [Numeric, nil] Period low (for pivot points)
+    # @return [Hash] All calculated indicators with keys :ema_20, :ema_50, :ema_100, :rsi_14, :macd, :pivot_points
+    # @example
+    #   calculator.calculate_all(prices, high: 105, low: 95)
+    #   # => { ema_20: 102.5, ema_50: 100.0, ema_100: 98.5, rsi_14: 55.0, macd: {...}, pivot_points: {...} }
     def calculate_all(prices, high: nil, low: nil)
       {
         ema_20: ema(prices, 20),

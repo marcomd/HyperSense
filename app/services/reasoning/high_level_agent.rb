@@ -100,7 +100,7 @@ module Reasoning
       weights = context[:weights] || default_weights
       <<~PROMPT
         # Financial analysis of the crypto market
-        
+
         ## Role
         You are a senior cryptocurrency macro strategist for an autonomous trading system.
         Your role is to analyze market conditions and provide strategic guidance for the day.

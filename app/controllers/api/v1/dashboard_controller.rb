@@ -31,6 +31,12 @@ module Api
 
       private
 
+      # Build account summary data for dashboard display
+      #
+      # Aggregates open positions, realized PnL, and circuit breaker status.
+      #
+      # @return [Hash] Account summary with keys :open_positions_count, :total_unrealized_pnl,
+      #   :total_margin_used, :realized_pnl_today, :paper_trading, :circuit_breaker
       def account_summary
         open_positions = Position.open
 
@@ -58,6 +64,11 @@ module Api
         }
       end
 
+      # Fetch and serialize open positions for dashboard display
+      #
+      # Returns the 10 most recent open positions with key trading data.
+      #
+      # @return [Array<Hash>] Array of position hashes with trading data
       def open_positions
         Position.open.recent.limit(10).map do |p|
           {
@@ -76,13 +87,29 @@ module Api
         end
       end
 
+      # Build market overview with prices, indicators, and forecasts for all assets
+      #
+      # Uses batch loading to avoid N+1 queries when fetching snapshots and forecasts.
+      #
+      # @return [Hash] Market data keyed by symbol (e.g., { "BTC" => { price: 97000, ... } })
       def market_overview
+        # Batch load latest snapshots for all symbols (single query)
+        snapshots_by_symbol = MarketSnapshot.latest_per_symbol
+                                            .index_by(&:symbol)
+
+        # Batch load latest 1h forecasts for all symbols (single query)
+        # Note: PostgreSQL DISTINCT ON requires ORDER BY to start with the DISTINCT ON column
+        forecasts_by_symbol = Forecast.where(symbol: Settings.assets.to_a, timeframe: "1h")
+                                      .select("DISTINCT ON (symbol) *")
+                                      .order(:symbol, created_at: :desc)
+                                      .index_by(&:symbol)
+
         Settings.assets.to_h do |symbol|
-          snapshot = MarketSnapshot.latest_for(symbol)
+          snapshot = snapshots_by_symbol[symbol]
           next [ symbol, nil ] unless snapshot
 
           indicators = snapshot.indicators || {}
-          forecast = Forecast.latest_for(symbol, "1h")
+          forecast = forecasts_by_symbol[symbol]
 
           [
             symbol,
@@ -100,6 +127,11 @@ module Api
         end
       end
 
+      # Serialize the currently active macro strategy
+      #
+      # Returns the active strategy with bias, risk tolerance, and validity info.
+      #
+      # @return [Hash, nil] Macro strategy data or nil if no active strategy
       def current_macro_strategy
         strategy = MacroStrategy.active
         return nil unless strategy
@@ -116,6 +148,11 @@ module Api
         }
       end
 
+      # Fetch and serialize recent trading decisions
+      #
+      # Returns the 5 most recent trading decisions with key data.
+      #
+      # @return [Array<Hash>] Array of decision hashes
       def recent_decisions
         TradingDecision.recent.limit(5).map do |d|
           {
@@ -131,6 +168,12 @@ module Api
         end
       end
 
+      # Build system health status for monitoring
+      #
+      # Checks health of market data collection, trading cycle, and macro strategy.
+      # A component is considered healthy if its last update is within expected intervals.
+      #
+      # @return [Hash] System status with health indicators for each component
       def system_status
         # Check last market snapshot
         last_snapshot = MarketSnapshot.recent.first

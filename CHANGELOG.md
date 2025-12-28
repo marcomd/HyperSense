@@ -2,6 +2,30 @@
 
 All notable changes to HyperSense.
 
+## [0.13.1] - 2025-12-28
+
+### Fixed
+- **Code Documentation** - Added comprehensive YARD-style documentation with `@return` types and examples
+  - `TradingCycle` - All public and private methods now documented
+  - `Indicators::Calculator` - All indicator methods include examples and return types
+  - `DashboardController` - All private helper methods documented
+  - `MarketSnapshot` - Instance methods for indicators documented with examples
+  - `MarketSnapshotJob` - Private methods documented
+
+- **N+1 Query in DashboardController** - `market_overview` method optimized
+  - Changed from N individual queries to 2 batch queries using `latest_per_symbol` and `DISTINCT ON`
+  - Now uses `index_by(&:symbol)` for O(1) lookup instead of N queries
+
+- **SQL Injection Risk in PricePredictor** - `fetch_price_at` method refactored
+  - Removed raw SQL with string interpolation (`Arel.sql("ABS(EXTRACT(EPOCH FROM ...))"`)
+  - Now uses parameterized range query with in-memory sorting for closest match
+  - Safer approach without performance impact (typically 0-4 records in result set)
+
+### Technical Details
+- All 6 modified files pass RuboCop (Omakase Ruby style)
+- No breaking changes to public APIs
+- Documentation follows CLAUDE.md guidelines (`@return [Type]` with examples)
+
 ## [0.13.0] - 2025-12-28
 
 ### Fixed
