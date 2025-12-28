@@ -29,6 +29,11 @@ module Risk
   class CircuitBreaker
     CACHE_KEY_PREFIX = "risk:circuit_breaker"
 
+    # Default fallback values when Settings are not configured
+    DEFAULT_MAX_DAILY_LOSS = 0.05
+    DEFAULT_MAX_CONSECUTIVE_LOSSES = 3
+    DEFAULT_COOLDOWN_HOURS = 24
+
     def initialize(account_manager: nil)
       @account_manager = account_manager || Execution::AccountManager.new
       @logger = Rails.logger
@@ -186,15 +191,15 @@ module Risk
     # Settings
 
     def max_daily_loss_pct
-      Settings.risk.max_daily_loss || 0.05
+      Settings.risk.max_daily_loss || DEFAULT_MAX_DAILY_LOSS
     end
 
     def max_consecutive_losses
-      Settings.risk.max_consecutive_losses || 3
+      Settings.risk.max_consecutive_losses || DEFAULT_MAX_CONSECUTIVE_LOSSES
     end
 
     def cooldown_hours
-      Settings.risk.circuit_breaker_cooldown || 24
+      Settings.risk.circuit_breaker_cooldown || DEFAULT_COOLDOWN_HOURS
     end
   end
 end

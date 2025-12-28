@@ -20,6 +20,10 @@ module Risk
   #   result[:risk_amount] # => 100 (USD)
   #
   class PositionSizer
+    # Decimal precision for different value types
+    BTC_DECIMAL_PRECISION = 8
+    USD_DECIMAL_PRECISION = 2
+
     def initialize(account_manager: nil)
       @account_manager = account_manager || Execution::AccountManager.new
       @logger = Rails.logger
@@ -44,7 +48,7 @@ module Risk
       return nil if risk_per_unit.zero?
 
       max_risk_amount = (account_value * max_risk_pct).to_d
-      calculated_size = (max_risk_amount / risk_per_unit).round(8)
+      calculated_size = (max_risk_amount / risk_per_unit).round(BTC_DECIMAL_PRECISION)
 
       # Cap at max position size
       max_size = Settings.risk.max_position_size.to_d
@@ -52,13 +56,13 @@ module Risk
       final_size = [ calculated_size, max_size ].min
 
       # Recalculate actual risk if capped
-      actual_risk = (final_size * risk_per_unit).round(2)
+      actual_risk = (final_size * risk_per_unit).round(USD_DECIMAL_PRECISION)
 
       @logger.info "[PositionSizer] #{direction} entry=#{entry_price} sl=#{stop_loss} " \
                    "size=#{final_size} risk=$#{actual_risk}#{capped ? ' (capped)' : ''}"
 
       {
-        size: final_size.to_f.round(8),
+        size: final_size.to_f.round(BTC_DECIMAL_PRECISION),
         risk_amount: actual_risk.to_f,
         risk_per_unit: risk_per_unit.to_f,
         capped: capped

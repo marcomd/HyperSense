@@ -12,6 +12,7 @@ module Reasoning
   class ContextAssembler
     LOOKBACK_HOURS = 24
     LOOKBACK_DAYS_MACRO = 7
+    PRICE_ACTION_CANDLES_LIMIT = 24
 
     # @param symbol [String, nil] Asset symbol for single-asset context
     def initialize(symbol: nil)
@@ -206,7 +207,7 @@ module Reasoning
       snapshots = MarketSnapshot.for_symbol(symbol)
                                 .last_hours(LOOKBACK_HOURS)
                                 .recent
-                                .limit(24)
+                                .limit(PRICE_ACTION_CANDLES_LIMIT)
 
       return {} if snapshots.empty?
 

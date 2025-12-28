@@ -20,6 +20,9 @@ module Risk
   #   end
   #
   class RiskManager
+    # Default fallback for minimum risk/reward ratio
+    DEFAULT_MIN_RISK_REWARD_RATIO = 2.0
+
     # Result object for validation checks
     ValidationResult = Struct.new(:valid, :reason, keyword_init: true) do
       def approved?
@@ -212,7 +215,7 @@ module Risk
     end
 
     def min_risk_reward_ratio
-      Settings.risk.try(:min_risk_reward_ratio) || 2.0
+      Settings.risk.try(:min_risk_reward_ratio) || DEFAULT_MIN_RISK_REWARD_RATIO
     end
   end
 end

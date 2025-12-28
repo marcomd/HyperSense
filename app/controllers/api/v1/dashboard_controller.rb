@@ -4,6 +4,15 @@ module Api
   module V1
     # Aggregated dashboard data for the frontend
     class DashboardController < BaseController
+      # Display limits for dashboard components
+      RECENT_POSITIONS_LIMIT = 10
+      RECENT_DECISIONS_LIMIT = 5
+      REASONING_TRUNCATE_LENGTH = 100
+
+      # Health check thresholds (minutes)
+      MARKET_DATA_HEALTH_MINUTES = 5
+      TRADING_CYCLE_HEALTH_MINUTES = 15
+
       # GET /api/v1/dashboard
       # Returns all data needed for the main dashboard view
       def index
@@ -70,7 +79,7 @@ module Api
       #
       # @return [Array<Hash>] Array of position hashes with trading data
       def open_positions
-        Position.open.recent.limit(10).map do |p|
+        Position.open.recent.limit(RECENT_POSITIONS_LIMIT).map do |p|
           {
             id: p.id,
             symbol: p.symbol,
@@ -154,7 +163,7 @@ module Api
       #
       # @return [Array<Hash>] Array of decision hashes
       def recent_decisions
-        TradingDecision.recent.limit(5).map do |d|
+        TradingDecision.recent.limit(RECENT_DECISIONS_LIMIT).map do |d|
           {
             id: d.id,
             symbol: d.symbol,
@@ -162,7 +171,7 @@ module Api
             direction: d.direction,
             confidence: d.confidence&.to_f,
             status: d.status,
-            reasoning: d.reasoning&.truncate(100),
+            reasoning: d.reasoning&.truncate(REASONING_TRUNCATE_LENGTH),
             created_at: d.created_at.iso8601
           }
         end
@@ -182,11 +191,11 @@ module Api
 
         {
           market_data: {
-            healthy: last_snapshot && last_snapshot.captured_at > 5.minutes.ago,
+            healthy: last_snapshot && last_snapshot.captured_at > MARKET_DATA_HEALTH_MINUTES.minutes.ago,
             last_update: last_snapshot&.captured_at&.iso8601
           },
           trading_cycle: {
-            healthy: last_decision && last_decision.created_at > 15.minutes.ago,
+            healthy: last_decision && last_decision.created_at > TRADING_CYCLE_HEALTH_MINUTES.minutes.ago,
             last_run: last_decision&.created_at&.iso8601
           },
           macro_strategy: {

@@ -7,6 +7,10 @@ module Reasoning
   # and make specific trading decisions.
   #
   class LowLevelAgent
+    # Limits for context data included in prompts
+    RECENT_NEWS_LIMIT = 5
+    WHALE_ALERTS_LIMIT = 5
+
     def self.model = Settings.llm.model
     def self.max_tokens = Settings.llm.low_level.max_tokens
     def self.temperature = Settings.llm.low_level.temperature
@@ -251,7 +255,7 @@ module Reasoning
       return "" unless news&.any?
 
       lines = [ "\nRecent News:" ]
-      news.first(5).each do |item|
+      news.first(RECENT_NEWS_LIMIT).each do |item|
         lines << "- #{item[:title]}"
       end
       lines.join("\n")
@@ -261,7 +265,7 @@ module Reasoning
       return "No recent whale alerts" unless alerts&.any?
 
       lines = []
-      alerts.first(5).each do |alert|
+      alerts.first(WHALE_ALERTS_LIMIT).each do |alert|
         lines << "- #{alert[:action]}: #{alert[:amount]} (#{alert[:usd_value]})"
       end
       lines.join("\n")

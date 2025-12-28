@@ -2,6 +2,43 @@
 
 All notable changes to HyperSense.
 
+## [0.13.2] - 2025-12-28
+
+### Added
+- **Missing Job Specs** - Complete test coverage for all background jobs
+  - `spec/jobs/forecast_job_spec.rb` - 9 examples covering forecast generation, validation, error handling
+  - `spec/jobs/macro_strategy_job_spec.rb` - 8 examples covering strategy creation, ActionCable broadcast
+  - `spec/jobs/market_snapshot_job_spec.rb` - 10 examples covering data fetching, indicator calculation, broadcasts
+  - `spec/jobs/trading_cycle_job_spec.rb` - 8 examples covering cycle execution, decision broadcasting
+
+### Changed
+- **Extracted Magic Numbers to Constants** - Improved code maintainability
+
+  **Models:**
+  - `MarketSnapshot::RSI_OVERSOLD_THRESHOLD` = 30, `RSI_OVERBOUGHT_THRESHOLD` = 70
+  - `Forecast::BEARISH_THRESHOLD_PCT` = -0.5, `BULLISH_THRESHOLD_PCT` = 0.5
+
+  **Controllers:**
+  - `DashboardController::RECENT_POSITIONS_LIMIT` = 10
+  - `DashboardController::RECENT_DECISIONS_LIMIT` = 5
+  - `DashboardController::REASONING_TRUNCATE_LENGTH` = 100
+  - `DashboardController::MARKET_DATA_HEALTH_MINUTES` = 5
+  - `DashboardController::TRADING_CYCLE_HEALTH_MINUTES` = 15
+
+  **Services:**
+  - `Risk::PositionSizer::BTC_DECIMAL_PRECISION` = 8, `USD_DECIMAL_PRECISION` = 2
+  - `Risk::CircuitBreaker::DEFAULT_MAX_DAILY_LOSS` = 0.05
+  - `Risk::CircuitBreaker::DEFAULT_MAX_CONSECUTIVE_LOSSES` = 3
+  - `Risk::CircuitBreaker::DEFAULT_COOLDOWN_HOURS` = 24
+  - `Risk::RiskManager::DEFAULT_MIN_RISK_REWARD_RATIO` = 2.0
+  - `Reasoning::LowLevelAgent::RECENT_NEWS_LIMIT` = 5, `WHALE_ALERTS_LIMIT` = 5
+  - `Reasoning::ContextAssembler::PRICE_ACTION_CANDLES_LIMIT` = 24
+
+### Technical Details
+- All 113 files pass RuboCop (Omakase Ruby style)
+- 515 examples, 0 failures (35 new job spec examples)
+- No breaking changes to public APIs
+
 ## [0.13.1] - 2025-12-28
 
 ### Fixed

@@ -10,6 +10,10 @@ class Forecast < ApplicationRecord
   VALID_TIMEFRAMES = %w[1m 15m 1h].freeze
   VALID_SYMBOLS = %w[BTC ETH SOL BNB].freeze
 
+  # Direction threshold constants (percentage change)
+  BEARISH_THRESHOLD_PCT = -0.5
+  BULLISH_THRESHOLD_PCT = 0.5
+
   # Validations
   validates :symbol, presence: true, inclusion: { in: VALID_SYMBOLS }
   validates :timeframe, presence: true, inclusion: { in: VALID_TIMEFRAMES }
@@ -51,8 +55,8 @@ class Forecast < ApplicationRecord
 
     pct_change = ((predicted_price - current_price) / current_price * 100).round(2)
     case pct_change
-    when ..(-0.5) then "bearish"
-    when 0.5.. then "bullish"
+    when ..BEARISH_THRESHOLD_PCT then "bearish"
+    when BULLISH_THRESHOLD_PCT.. then "bullish"
     else "neutral"
     end
   end

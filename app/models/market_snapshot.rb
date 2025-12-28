@@ -17,6 +17,10 @@
 #   snapshot.rsi_signal   # => :neutral
 #
 class MarketSnapshot < ApplicationRecord
+  # RSI threshold constants for overbought/oversold signals
+  RSI_OVERSOLD_THRESHOLD = 30
+  RSI_OVERBOUGHT_THRESHOLD = 70
+
   # Validations
   validates :symbol, presence: true
   validates :price, presence: true, numericality: { greater_than: 0 }
@@ -89,8 +93,8 @@ class MarketSnapshot < ApplicationRecord
     return nil unless rsi
 
     case rsi
-    when 0..30 then :oversold
-    when 70..100 then :overbought
+    when 0..RSI_OVERSOLD_THRESHOLD then :oversold
+    when RSI_OVERBOUGHT_THRESHOLD..100 then :overbought
     else :neutral
     end
   end
