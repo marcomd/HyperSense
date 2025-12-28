@@ -7,7 +7,6 @@ module Reasoning
   # strategic direction (bias, risk tolerance) for the day.
   #
   class HighLevelAgent
-    def self.model = Settings.llm.model
     def self.max_tokens = Settings.llm.high_level.max_tokens
     def self.temperature = Settings.llm.high_level.temperature
 
@@ -59,8 +58,9 @@ module Reasoning
     PROMPT
 
     def initialize
-      @client = Anthropic::Client.new(
-        api_key: Settings.anthropic.api_key
+      @client = LLM::Client.new(
+        max_tokens: self.class.max_tokens,
+        temperature: self.class.temperature
       )
       @logger = Rails.logger
       @context_assembler = ContextAssembler.new
@@ -82,10 +82,10 @@ module Reasoning
       else
         handle_invalid_response(parsed[:errors], context, response)
       end
-    rescue Anthropic::RateLimitError => e
+    rescue LLM::RateLimitError => e
       @logger.warn "[HighLevelAgent] Rate limited: #{e.message}"
       nil
-    rescue Anthropic::Errors::APIError, Faraday::Error => e
+    rescue LLM::APIError, LLM::ConfigurationError, Faraday::Error => e
       @logger.error "[HighLevelAgent] API error: #{e.message}"
       nil
     rescue StandardError => e
@@ -216,21 +216,15 @@ module Reasoning
     end
 
     def call_llm(user_prompt)
-      @logger.info "[HighLevelAgent] Calling Claude API..."
+      @logger.info "[HighLevelAgent] Calling LLM API (#{@client.provider})..."
 
-      response = @client.messages.create(
-        model: self.class.model,
-        max_tokens: self.class.max_tokens,
-        temperature: self.class.temperature,
-        system: SYSTEM_PROMPT,
-        messages: [ { role: "user", content: user_prompt } ]
+      response = @client.chat(
+        system_prompt: SYSTEM_PROMPT,
+        user_prompt: user_prompt
       )
 
-      content = response.content.first
-      raise "Empty response from LLM" unless content&.text
-
-      @logger.info "[HighLevelAgent] Received response (#{content.text.length} chars)"
-      content.text
+      @logger.info "[HighLevelAgent] Received response (#{response.length} chars)"
+      response
     end
 
     def create_strategy(data, context, raw_response)

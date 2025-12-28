@@ -49,13 +49,18 @@ macro:
   refresh_interval_hours: 24     # How often to refresh macro strategy
   lookback_days: 7               # Days of data for macro analysis
 
-# Anthropic API Configuration
-anthropic:
-  api_key: <%= ENV.fetch('ANTHROPIC_API_KEY', '') %>
-
-# LLM Configuration
+# LLM Configuration (supports Anthropic, Gemini, Ollama)
 llm:
-  model: <%= ENV.fetch('LLM_MODEL', 'claude-sonnet-4-5') %>  # Claude model for reasoning agents
+  provider: <%= ENV.fetch('LLM_PROVIDER', 'anthropic') %>
+  anthropic:
+    api_key: <%= ENV.fetch('ANTHROPIC_API_KEY', '') %>
+    model: <%= ENV.fetch('ANTHROPIC_MODEL', 'claude-sonnet-4-5') %>
+  gemini:
+    api_key: <%= ENV.fetch('GEMINI_API_KEY', '') %>
+    model: <%= ENV.fetch('GEMINI_MODEL', 'gemini-2.0-flash-exp') %>
+  ollama:
+    api_base: <%= ENV.fetch('OLLAMA_API_BASE', 'http://localhost:11434/v1') %>
+    model: <%= ENV.fetch('OLLAMA_MODEL', 'llama3') %>
   high_level:
     max_tokens: 2000
     temperature: 0.3

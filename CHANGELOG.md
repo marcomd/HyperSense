@@ -2,6 +2,44 @@
 
 All notable changes to HyperSense.
 
+## [0.14.0] - 2025-12-28
+
+### Added
+- **LLM-Agnostic Architecture** - Replaced single-provider Anthropic integration with multi-provider support
+  - `LLM::Client` - Unified LLM client wrapper using ruby_llm gem
+  - `LLM::Error`, `LLM::RateLimitError`, `LLM::APIError`, `LLM::ConfigurationError`, `LLM::InvalidResponseError` - Custom error hierarchy
+  - Support for Anthropic, Google Gemini, and Ollama providers via `LLM_PROVIDER` env var
+  - Per-provider model configuration: `ANTHROPIC_MODEL`, `GEMINI_MODEL`, `OLLAMA_MODEL`
+
+### Changed
+- Replaced `anthropic` gem with `ruby_llm` gem in Gemfile
+- `Reasoning::HighLevelAgent` now uses `LLM::Client` instead of `Anthropic::Client`
+- `Reasoning::LowLevelAgent` now uses `LLM::Client` instead of `Anthropic::Client`
+- Updated `config/settings.yml` with multi-provider LLM configuration
+- Updated error handling from Anthropic-specific to generic `LLM::` error classes
+
+### Configuration
+New LLM settings in `config/settings.yml`:
+```yaml
+llm:
+  provider: <%= ENV.fetch('LLM_PROVIDER', 'anthropic') %>
+  anthropic:
+    api_key: <%= ENV.fetch('ANTHROPIC_API_KEY', '') %>
+    model: <%= ENV.fetch('ANTHROPIC_MODEL', 'claude-sonnet-4-5') %>
+  gemini:
+    api_key: <%= ENV.fetch('GEMINI_API_KEY', '') %>
+    model: <%= ENV.fetch('GEMINI_MODEL', 'gemini-2.0-flash-exp') %>
+  ollama:
+    api_base: <%= ENV.fetch('OLLAMA_API_BASE', 'http://localhost:11434/v1') %>
+    model: <%= ENV.fetch('OLLAMA_MODEL', 'llama3') %>
+```
+
+### Technical Details
+- New files: `app/services/llm/client.rb`, `app/services/llm/errors.rb`, `config/initializers/ruby_llm.rb`
+- ruby_llm handles automatic retry with backoff for rate limits
+- Provider switch requires only changing `LLM_PROVIDER` env var and setting provider-specific credentials
+- No changes to LLM prompt structure or decision parsing
+
 ## [0.13.4] - 2025-12-28
 
 ### Changed

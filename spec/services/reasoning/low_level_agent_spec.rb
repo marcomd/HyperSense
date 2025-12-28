@@ -31,11 +31,7 @@ RSpec.describe Reasoning::LowLevelAgent do
       end
 
       before do
-        allow_any_instance_of(Anthropic::Client).to receive_message_chain(:messages, :create).and_return(
-          OpenStruct.new(
-            content: [ OpenStruct.new(text: open_decision_response) ]
-          )
-        )
+        allow_any_instance_of(LLM::Client).to receive(:chat).and_return(open_decision_response)
       end
 
       it "creates a TradingDecision record" do
@@ -103,11 +99,7 @@ RSpec.describe Reasoning::LowLevelAgent do
       end
 
       before do
-        allow_any_instance_of(Anthropic::Client).to receive_message_chain(:messages, :create).and_return(
-          OpenStruct.new(
-            content: [ OpenStruct.new(text: hold_decision_response) ]
-          )
-        )
+        allow_any_instance_of(LLM::Client).to receive(:chat).and_return(hold_decision_response)
       end
 
       it "creates a hold decision" do
@@ -127,11 +119,7 @@ RSpec.describe Reasoning::LowLevelAgent do
       let(:invalid_response) { "{ invalid json" }
 
       before do
-        allow_any_instance_of(Anthropic::Client).to receive_message_chain(:messages, :create).and_return(
-          OpenStruct.new(
-            content: [ OpenStruct.new(text: invalid_response) ]
-          )
-        )
+        allow_any_instance_of(LLM::Client).to receive(:chat).and_return(invalid_response)
       end
 
       it "creates a rejected hold decision" do
@@ -162,11 +150,7 @@ RSpec.describe Reasoning::LowLevelAgent do
       end
 
       before do
-        allow_any_instance_of(Anthropic::Client).to receive_message_chain(:messages, :create).and_return(
-          OpenStruct.new(
-            content: [ OpenStruct.new(text: hold_response) ]
-          )
-        )
+        allow_any_instance_of(LLM::Client).to receive(:chat).and_return(hold_response)
       end
 
       it "works without macro strategy" do
@@ -178,8 +162,8 @@ RSpec.describe Reasoning::LowLevelAgent do
 
     context "with API error" do
       before do
-        allow_any_instance_of(Anthropic::Client).to receive_message_chain(:messages, :create).and_raise(
-          Faraday::ConnectionFailed.new("Connection failed")
+        allow_any_instance_of(LLM::Client).to receive(:chat).and_raise(
+          LLM::APIError.new("Connection failed")
         )
       end
 
@@ -217,11 +201,7 @@ RSpec.describe Reasoning::LowLevelAgent do
       end
 
       before do
-        allow_any_instance_of(Anthropic::Client).to receive_message_chain(:messages, :create).and_return(
-          OpenStruct.new(
-            content: [ OpenStruct.new(text: close_decision_response) ]
-          )
-        )
+        allow_any_instance_of(LLM::Client).to receive(:chat).and_return(close_decision_response)
       end
 
       it "creates a close decision" do
@@ -257,11 +237,7 @@ RSpec.describe Reasoning::LowLevelAgent do
       end
 
       before do
-        allow_any_instance_of(Anthropic::Client).to receive_message_chain(:messages, :create).and_return(
-          OpenStruct.new(
-            content: [ OpenStruct.new(text: hold_response) ]
-          )
-        )
+        allow_any_instance_of(LLM::Client).to receive(:chat).and_return(hold_response)
       end
 
       context "without open position" do
@@ -316,11 +292,7 @@ RSpec.describe Reasoning::LowLevelAgent do
     end
 
     before do
-      allow_any_instance_of(Anthropic::Client).to receive_message_chain(:messages, :create).and_return(
-        OpenStruct.new(
-          content: [ OpenStruct.new(text: hold_response) ]
-        )
-      )
+      allow_any_instance_of(LLM::Client).to receive(:chat).and_return(hold_response)
     end
 
     it "returns decisions for all configured assets" do
@@ -342,10 +314,6 @@ RSpec.describe Reasoning::LowLevelAgent do
   end
 
   describe "LLM configuration" do
-    it "reads model from settings" do
-      expect(described_class.model).to eq(Settings.llm.model)
-    end
-
     it "reads max tokens from settings" do
       expect(described_class.max_tokens).to eq(Settings.llm.low_level.max_tokens)
       expect(described_class.max_tokens).to be > 0

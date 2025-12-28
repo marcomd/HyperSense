@@ -7,9 +7,13 @@ VCR.configure do |config|
   config.hook_into :webmock
   config.configure_rspec_metadata!
 
-  # Filter sensitive data
+  # Filter sensitive data (LLM API keys)
   config.filter_sensitive_data("<ANTHROPIC_API_KEY>") do
-    Settings.anthropic.api_key
+    Settings.llm.anthropic.api_key
+  end
+
+  config.filter_sensitive_data("<GEMINI_API_KEY>") do
+    Settings.llm.gemini.api_key
   end
 
   # Allow localhost connections for test database

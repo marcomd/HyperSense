@@ -31,12 +31,8 @@ RSpec.describe Reasoning::HighLevelAgent do
       end
 
       before do
-        # Mock the Anthropic API response
-        allow_any_instance_of(Anthropic::Client).to receive_message_chain(:messages, :create).and_return(
-          OpenStruct.new(
-            content: [ OpenStruct.new(text: valid_llm_response) ]
-          )
-        )
+        # Mock the LLM Client response
+        allow_any_instance_of(LLM::Client).to receive(:chat).and_return(valid_llm_response)
       end
 
       it "creates a MacroStrategy record" do
@@ -88,11 +84,7 @@ RSpec.describe Reasoning::HighLevelAgent do
       let(:invalid_llm_response) { "{ invalid json" }
 
       before do
-        allow_any_instance_of(Anthropic::Client).to receive_message_chain(:messages, :create).and_return(
-          OpenStruct.new(
-            content: [ OpenStruct.new(text: invalid_llm_response) ]
-          )
-        )
+        allow_any_instance_of(LLM::Client).to receive(:chat).and_return(invalid_llm_response)
       end
 
       it "creates a fallback neutral strategy" do
@@ -115,8 +107,8 @@ RSpec.describe Reasoning::HighLevelAgent do
 
     context "with API connection error" do
       before do
-        allow_any_instance_of(Anthropic::Client).to receive_message_chain(:messages, :create).and_raise(
-          Faraday::ConnectionFailed.new("Connection failed")
+        allow_any_instance_of(LLM::Client).to receive(:chat).and_raise(
+          LLM::APIError.new("Connection failed")
         )
       end
 
@@ -132,23 +124,19 @@ RSpec.describe Reasoning::HighLevelAgent do
 
     context "with empty LLM response" do
       before do
-        allow_any_instance_of(Anthropic::Client).to receive_message_chain(:messages, :create).and_return(
-          OpenStruct.new(content: [ OpenStruct.new(text: nil) ])
+        allow_any_instance_of(LLM::Client).to receive(:chat).and_raise(
+          LLM::InvalidResponseError.new("Empty response from LLM")
         )
       end
 
       it "raises an error for empty response" do
         # Empty responses should trigger the standard error handling and raise
-        expect { agent.analyze }.to raise_error(RuntimeError, /Empty response/)
+        expect { agent.analyze }.to raise_error(LLM::InvalidResponseError, /Empty response/)
       end
     end
   end
 
   describe "LLM configuration" do
-    it "reads model from settings" do
-      expect(described_class.model).to eq(Settings.llm.model)
-    end
-
     it "reads max tokens from settings" do
       expect(described_class.max_tokens).to eq(Settings.llm.high_level.max_tokens)
       expect(described_class.max_tokens).to be > 0

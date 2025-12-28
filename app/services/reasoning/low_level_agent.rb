@@ -11,7 +11,6 @@ module Reasoning
     RECENT_NEWS_LIMIT = 5
     WHALE_ALERTS_LIMIT = 5
 
-    def self.model = Settings.llm.model
     def self.max_tokens = Settings.llm.low_level.max_tokens
     def self.temperature = Settings.llm.low_level.temperature
 
@@ -101,8 +100,9 @@ module Reasoning
     PROMPT
 
     def initialize
-      @client = Anthropic::Client.new(
-        api_key: Settings.anthropic.api_key
+      @client = LLM::Client.new(
+        max_tokens: self.class.max_tokens,
+        temperature: self.class.temperature
       )
       @logger = Rails.logger
     end
@@ -122,10 +122,10 @@ module Reasoning
       parsed = DecisionParser.parse_trading_decision(response)
 
       create_decision(symbol, parsed, context, response, macro_strategy)
-    rescue Anthropic::RateLimitError => e
+    rescue LLM::RateLimitError => e
       @logger.warn "[LowLevelAgent] Rate limited for #{symbol}: #{e.message}"
       create_error_decision(symbol, "Rate limited - holding", macro_strategy)
-    rescue Anthropic::Errors::APIError, Faraday::Error => e
+    rescue LLM::APIError, LLM::ConfigurationError, Faraday::Error => e
       @logger.error "[LowLevelAgent] API error for #{symbol}: #{e.message}"
       create_error_decision(symbol, e.message, macro_strategy)
     rescue StandardError => e
@@ -308,21 +308,15 @@ module Reasoning
     end
 
     def call_llm(user_prompt)
-      @logger.info "[LowLevelAgent] Calling Claude API..."
+      @logger.info "[LowLevelAgent] Calling LLM API (#{@client.provider})..."
 
-      response = @client.messages.create(
-        model: self.class.model,
-        max_tokens: self.class.max_tokens,
-        temperature: self.class.temperature,
-        system: SYSTEM_PROMPT,
-        messages: [ { role: "user", content: user_prompt } ]
+      response = @client.chat(
+        system_prompt: SYSTEM_PROMPT,
+        user_prompt: user_prompt
       )
 
-      content = response.content.first
-      raise "Empty response from LLM" unless content&.text
-
       @logger.info "[LowLevelAgent] Received response"
-      content.text
+      response
     end
 
     def create_decision(symbol, parsed, context, raw_response, macro_strategy)

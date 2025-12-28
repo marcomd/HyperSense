@@ -37,7 +37,7 @@ gem "thruster", require: false
 gem "rack-cors"
 
 # HyperSense Core Dependencies
-gem "anthropic"              # Official Anthropic LLM SDK
+gem "ruby_llm"               # LLM-agnostic SDK (Anthropic, Gemini, Ollama, etc.)
 gem "faraday"                # HTTP client for API calls
 gem "oj"                     # Fast JSON parsing
 gem "feedjira"               # RSS feed parsing

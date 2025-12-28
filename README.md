@@ -1,6 +1,6 @@
 # HyperSense
 
-**Version 0.13.4** | Autonomous AI Trading Agent for cryptocurrency markets.
+**Version 0.14.0** | Autonomous AI Trading Agent for cryptocurrency markets.
 
 ![HyperSense_cover1.jpg](docs/HyperSense_cover1.jpg)
 
@@ -106,7 +106,7 @@ All day  → TradingCycleJob (5min) makes decisions within macro bias
 | Database | PostgreSQL 16 | Port 5433 (avoids local PG conflict) |
 | Job Queue | Solid Queue | No Redis needed! |
 | Scheduling | recurring.yml | Built into Solid Queue |
-| LLM | Anthropic Ruby SDK | Official SDK |
+| LLM | ruby_llm gem | Multi-provider (Anthropic, Gemini, Ollama) |
 | Exchange | hyperliquid gem (forked) | Extend with write ops |
 | Signing | eth gem | EIP-712 for Hyperliquid |
 | Frontend | React + Vite + TypeScript | Rich charting, React Router |
@@ -152,6 +152,9 @@ HyperSense/
 │   │       │   └── price_predictor.rb    # Prophet ML forecasting
 │   │       ├── indicators/
 │   │       │   └── calculator.rb         # EMA, RSI, MACD, Pivots
+│   │       ├── llm/
+│   │       │   ├── client.rb             # LLM-agnostic client wrapper
+│   │       │   └── errors.rb             # Custom LLM error classes
 │   │       ├── reasoning/
 │   │       │   ├── context_assembler.rb  # Weighted context for LLM
 │   │       │   ├── decision_parser.rb    # JSON validation (dry-validation)
@@ -217,7 +220,7 @@ HyperSense/
 3. **Configure environment variables**
    ```bash
    cp .env.example .env
-   # Edit .env to customize database settings, LLM_MODEL and add Hyperliquid credentials
+   # Edit .env to customize database settings, LLM provider and add Hyperliquid credentials
    ```
 
 4. **Start PostgreSQL** (uses port 5433 to avoid conflicts with local PostgreSQL)
@@ -244,15 +247,24 @@ HyperSense/
    # For remote databases, use DATABASE_URL instead:
    # DATABASE_URL=postgresql://user:password@host:5432/hypersense
 
-   # Required: Anthropic API key for AI reasoning
+   # LLM Provider: anthropic, gemini, or ollama
+   LLM_PROVIDER=anthropic
+
+   # Anthropic (required if LLM_PROVIDER=anthropic)
    ANTHROPIC_API_KEY=your_anthropic_api_key
+   ANTHROPIC_MODEL=claude-sonnet-4-5
+
+   # Gemini (required if LLM_PROVIDER=gemini)
+   # GEMINI_API_KEY=your_gemini_api_key
+   # GEMINI_MODEL=gemini-2.0-flash-exp
+
+   # Ollama (required if LLM_PROVIDER=ollama)
+   # OLLAMA_API_BASE=http://localhost:11434/v1
+   # OLLAMA_MODEL=llama3
 
    # Required: Hyperliquid credentials for trading
    HYPERLIQUID_PRIVATE_KEY=your_wallet_private_key
    HYPERLIQUID_ADDRESS=your_wallet_address
-
-   # Optional: Override default LLM model
-   LLM_MODEL=claude-sonnet-4-5
    ```
 
 7. **Test data pipeline**
