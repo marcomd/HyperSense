@@ -71,7 +71,10 @@ module Execution
     # Check if a new trade can be executed
     # @param margin_required [Numeric] Required margin for the trade
     # @return [Boolean] Whether trade is allowed
+    # @raise [HyperliquidClient::ConfigurationError] When credentials not configured
     def can_trade?(margin_required:)
+      ensure_configured!
+
       account_state = fetch_account_state
 
       # Check margin availability
@@ -108,6 +111,14 @@ module Execution
     end
 
     private
+
+    def ensure_configured!
+      return if @client.configured?
+
+      raise HyperliquidClient::ConfigurationError,
+            "Hyperliquid credentials not configured. " \
+            "Add HYPERLIQUID_ADDRESS and HYPERLIQUID_PRIVATE_KEY to your .env file"
+    end
 
     def log_success(action, request, response)
       ExecutionLog.log_success!(

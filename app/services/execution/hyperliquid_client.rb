@@ -5,7 +5,7 @@ module Execution
   #
   # Provides:
   # - Connection management with automatic testnet/mainnet switching
-  # - Credential management from Rails credentials
+  # - Credential management from ENV variables (HYPERLIQUID_ADDRESS, HYPERLIQUID_PRIVATE_KEY)
   # - Error handling and wrapping
   # - Rate limiting awareness
   #
@@ -43,7 +43,7 @@ module Execution
     # @return [String]
     # @raise [ConfigurationError] if not configured
     def address
-      raise ConfigurationError, "Hyperliquid address not configured in credentials" unless wallet_address.present?
+      raise ConfigurationError, "Hyperliquid address not configured. Add HYPERLIQUID_ADDRESS to .env" unless wallet_address.present?
       wallet_address
     end
 
@@ -168,11 +168,11 @@ module Execution
     end
 
     def private_key
-      Rails.application.credentials.dig(:hyperliquid, :private_key)
+      ENV.fetch("HYPERLIQUID_PRIVATE_KEY", nil)
     end
 
     def wallet_address
-      Rails.application.credentials.dig(:hyperliquid, :address)
+      ENV.fetch("HYPERLIQUID_ADDRESS", nil)
     end
 
     def with_error_handling

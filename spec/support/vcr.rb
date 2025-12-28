@@ -9,7 +9,7 @@ VCR.configure do |config|
 
   # Filter sensitive data
   config.filter_sensitive_data("<ANTHROPIC_API_KEY>") do
-    Rails.application.credentials.dig(:anthropic, :api_key)
+    Settings.anthropic.api_key
   end
 
   # Allow localhost connections for test database

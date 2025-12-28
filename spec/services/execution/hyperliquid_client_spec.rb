@@ -26,18 +26,14 @@ RSpec.describe Execution::HyperliquidClient do
   end
 
   describe "#address" do
-    it "returns the configured wallet address" do
-      allow(Rails.application.credentials).to receive(:dig)
-        .with(:hyperliquid, :address)
-        .and_return(test_address)
+    it "returns the configured wallet address from ENV" do
+      allow(ENV).to receive(:fetch).with("HYPERLIQUID_ADDRESS", nil).and_return(test_address)
 
       expect(client.address).to eq(test_address)
     end
 
     it "raises error when address is not configured" do
-      allow(Rails.application.credentials).to receive(:dig)
-        .with(:hyperliquid, :address)
-        .and_return(nil)
+      allow(ENV).to receive(:fetch).with("HYPERLIQUID_ADDRESS", nil).and_return(nil)
 
       client = described_class.new
       expect { client.address }.to raise_error(Execution::HyperliquidClient::ConfigurationError)
@@ -45,19 +41,16 @@ RSpec.describe Execution::HyperliquidClient do
   end
 
   describe "#configured?" do
-    it "returns true when credentials are present" do
-      allow(Rails.application.credentials).to receive(:dig)
-        .with(:hyperliquid, :address)
-        .and_return(test_address)
-      allow(Rails.application.credentials).to receive(:dig)
-        .with(:hyperliquid, :private_key)
-        .and_return("abc123")
+    it "returns true when ENV credentials are present" do
+      allow(ENV).to receive(:fetch).with("HYPERLIQUID_ADDRESS", nil).and_return(test_address)
+      allow(ENV).to receive(:fetch).with("HYPERLIQUID_PRIVATE_KEY", nil).and_return("abc123")
 
       expect(client.configured?).to be true
     end
 
-    it "returns false when credentials are missing" do
-      allow(Rails.application.credentials).to receive(:dig).and_return(nil)
+    it "returns false when ENV credentials are missing" do
+      allow(ENV).to receive(:fetch).with("HYPERLIQUID_ADDRESS", nil).and_return(nil)
+      allow(ENV).to receive(:fetch).with("HYPERLIQUID_PRIVATE_KEY", nil).and_return(nil)
 
       expect(client.configured?).to be false
     end

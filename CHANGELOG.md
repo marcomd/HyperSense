@@ -2,6 +2,24 @@
 
 All notable changes to HyperSense.
 
+## [0.11.0] - 2025-12-28
+
+### Fixed
+- **Credential Configuration Bug** - Trading decisions were not being executed due to credential mismatch
+  - `HyperliquidClient` was reading from `Rails.application.credentials` (nil) instead of ENV variables
+  - Updated `private_key` and `wallet_address` methods to use `ENV.fetch("HYPERLIQUID_PRIVATE_KEY", nil)` and `ENV.fetch("HYPERLIQUID_ADDRESS", nil)`
+  - Error messages now reference `.env` file instead of Rails credentials
+
+### Added
+- `AccountManager#ensure_configured!` - Pre-flight check before trading operations
+  - Raises `ConfigurationError` with clear setup instructions when credentials missing
+  - Called at the start of `can_trade?` to fail fast with actionable error message
+
+### Technical Details
+- Updated `hyperliquid_client_spec.rb` tests to mock ENV instead of Rails credentials
+- Added 2 new tests in `account_manager_spec.rb` for missing credentials scenario
+- All 32 execution service tests passing, RuboCop clean
+
 ## [0.10.0] - 2025-12-27
 
 ### Changed
