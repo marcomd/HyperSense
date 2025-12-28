@@ -99,25 +99,25 @@ class TradingDecision < ApplicationRecord
   # Extract leverage from parsed_decision
   # @return [Integer, nil]
   def leverage
-    parsed_decision["leverage"]
+    parsed_decision["leverage"]&.to_i
   end
 
   # Extract target_position from parsed_decision
   # @return [Float, nil]
   def target_position
-    parsed_decision["target_position"]
+    parsed_decision["target_position"]&.to_f
   end
 
   # Extract stop_loss from parsed_decision
   # @return [Float, nil]
   def stop_loss
-    parsed_decision["stop_loss"]
+    parsed_decision["stop_loss"]&.to_f
   end
 
   # Extract take_profit from parsed_decision
   # @return [Float, nil]
   def take_profit
-    parsed_decision["take_profit"]
+    parsed_decision["take_profit"]&.to_f
   end
 
   # Extract reasoning from parsed_decision

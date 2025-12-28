@@ -248,5 +248,46 @@ RSpec.describe TradingDecision do
         expect(decision.reasoning).to eq("Strong setup")
       end
     end
+
+    describe "parsed_decision accessors with string values (LLM JSON)" do
+      # LLM responses often return numeric values as strings in JSON
+      let(:decision) do
+        build(:trading_decision, parsed_decision: {
+          "leverage" => "5",
+          "target_position" => "0.02",
+          "stop_loss" => "95000",
+          "take_profit" => "105000.50",
+          "reasoning" => "Strong setup"
+        })
+      end
+
+      it "#leverage converts string to integer" do
+        expect(decision.leverage).to eq(5)
+        expect(decision.leverage).to be_a(Integer)
+      end
+
+      it "#target_position converts string to float" do
+        expect(decision.target_position).to eq(0.02)
+        expect(decision.target_position).to be_a(Float)
+      end
+
+      it "#stop_loss converts string to float" do
+        expect(decision.stop_loss).to eq(95_000.0)
+        expect(decision.stop_loss).to be_a(Float)
+      end
+
+      it "#take_profit converts string to float" do
+        expect(decision.take_profit).to eq(105_000.50)
+        expect(decision.take_profit).to be_a(Float)
+      end
+
+      it "returns nil for missing values without raising errors" do
+        empty_decision = build(:trading_decision, parsed_decision: {})
+        expect(empty_decision.leverage).to be_nil
+        expect(empty_decision.target_position).to be_nil
+        expect(empty_decision.stop_loss).to be_nil
+        expect(empty_decision.take_profit).to be_nil
+      end
+    end
   end
 end

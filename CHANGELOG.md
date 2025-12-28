@@ -2,6 +2,29 @@
 
 All notable changes to HyperSense.
 
+## [0.13.0] - 2025-12-28
+
+### Fixed
+- **Prophet DataFrame Format** - ForecastJob was failing with "Must be a data frame" error
+  - Changed from array of hashes to `Rover::DataFrame` for Prophet input data
+  - Added `require "rover"` to `Forecasting::PricePredictor`
+  - Fixed frequency parameter from `"T"` to `"60S"` (prophet-rb doesn't support pandas-style "T")
+  - Fixed value extraction from `prediction.last["yhat"]` to `prediction["yhat"].last` (returns Float instead of Rover::Vector)
+
+- **TradingDecision String Division Error** - TradingCycleJob was failing with "undefined method '/' for String"
+  - LLM JSON responses can return numeric values as strings (e.g., `"leverage": "5"`)
+  - Added `.to_i` / `.to_f` conversions to accessor methods: `leverage`, `target_position`, `stop_loss`, `take_profit`
+
+### Added
+- **Regression Tests** - Specs to prevent these issues from recurring
+  - `spec/services/forecasting/price_predictor_spec.rb` - 10 examples covering DataFrame format, value extraction, frequency strings
+  - `spec/models/trading_decision_spec.rb` - Added 5 examples for string-to-numeric conversion from LLM JSON
+
+### Technical Details
+- Prophet-rb valid frequencies: `"60S"` (seconds), `"H"` (hours), `"D"` (days), `"W"` (weeks), `"MS"` (month start)
+- Forecasts now generating: 8 forecasts per cycle (1m and 15m for BTC, ETH, SOL, BNB)
+- All 46 new tests passing, 163 total model tests, RuboCop clean
+
 ## [0.12.0] - 2025-12-28
 
 ### Added

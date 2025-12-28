@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "prophet"
+require "rover"
 
 module Forecasting
   # Price prediction service using Meta's Prophet
@@ -88,10 +89,11 @@ module Forecasting
     def predict_for_timeframe(timeframe, historical_data, current_price, config)
       return nil if historical_data.size < config[:min_data_points]
 
-      # Prepare data for Prophet (requires 'ds' and 'y' columns)
-      prophet_data = historical_data.map do |point|
-        { "ds" => point[:timestamp], "y" => point[:price] }
-      end
+      # Prepare data for Prophet (requires Rover::DataFrame with 'ds' and 'y' columns)
+      prophet_data = Rover::DataFrame.new({
+        "ds" => historical_data.map { |p| p[:timestamp] },
+        "y" => historical_data.map { |p| p[:price] }
+      })
 
       # Train Prophet model
       model = Prophet.new(
@@ -104,11 +106,11 @@ module Forecasting
 
       # Generate future prediction
       forecast_time = Time.current + config[:minutes].minutes
-      future = model.make_future_dataframe(periods: config[:minutes], freq: "T", include_history: false)
+      future = model.make_future_dataframe(periods: config[:minutes], freq: "60S", include_history: false)
       prediction = model.predict(future)
 
-      # Get the predicted value (last row of prediction)
-      predicted_price = prediction.last["yhat"]
+      # Get the predicted value (last value of yhat column)
+      predicted_price = prediction["yhat"].last
 
       # Create and save forecast record
       create_forecast(timeframe, current_price, predicted_price, forecast_time)
