@@ -5,6 +5,10 @@ require "rails_helper"
 RSpec.describe LLM::Client do
   describe "#initialize" do
     context "with default configuration (anthropic)" do
+      before do
+        allow(Settings.llm).to receive(:provider).and_return("anthropic")
+      end
+
       it "creates a client with anthropic provider" do
         client = described_class.new
         expect(client.provider).to eq("anthropic")
@@ -220,6 +224,10 @@ RSpec.describe LLM::Client do
   end
 
   describe "#provider_info" do
+    before do
+      allow(Settings.llm).to receive(:provider).and_return("anthropic")
+    end
+
     let(:client) { described_class.new(max_tokens: 2000, temperature: 0.5) }
 
     it "returns provider configuration details" do

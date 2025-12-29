@@ -1,6 +1,6 @@
 # HyperSense
 
-**Version 0.15.1** | Autonomous AI Trading Agent for cryptocurrency markets.
+**Version 0.15.2** | Autonomous AI Trading Agent for cryptocurrency markets.
 
 ![HyperSense_cover1.jpg](docs/HyperSense_cover1.jpg)
 
@@ -127,7 +127,8 @@ HyperSense/
 │   │   │       ├── positions_controller.rb
 │   │   │       ├── decisions_controller.rb
 │   │   │       ├── market_data_controller.rb
-│   │   │       └── macro_strategies_controller.rb
+│   │   │       ├── macro_strategies_controller.rb
+│   │   │       └── execution_logs_controller.rb
 │   │   ├── jobs/                   # Solid Queue jobs
 │   │   │   ├── trading_cycle_job.rb
 │   │   │   ├── macro_strategy_job.rb
@@ -728,6 +729,9 @@ pm.update_prices
 | `/api/v1/market_data/snapshots` | GET | Market snapshots (paginated with filters) |
 | `/api/v1/macro_strategies` | GET | Macro strategies (paginated) |
 | `/api/v1/macro_strategies/current` | GET | Active macro strategy |
+| `/api/v1/execution_logs` | GET | Execution logs (paginated with filters) |
+| `/api/v1/execution_logs/:id` | GET | Single execution log details |
+| `/api/v1/execution_logs/stats` | GET | Execution statistics (success rate, by action) |
 
 **WebSocket Channels:**
 
@@ -767,6 +771,7 @@ const markets = cable.subscriptions.create({ channel: "MarketsChannel", symbol: 
 | `/macro-strategies` | MacroStrategiesPage | Strategy history with bias filter, expandable narrative |
 | `/forecasts` | ForecastsPage | Price forecasts with symbol, timeframe, date filters |
 | `/market-snapshots` | MarketSnapshotsPage | Market snapshots with RSI/MACD signals, expandable indicators |
+| `/execution-logs` | ExecutionLogsPage | Execution logs with status, action filters, expandable payloads |
 
 **Filter Components:**
 

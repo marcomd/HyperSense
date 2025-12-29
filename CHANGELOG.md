@@ -2,6 +2,16 @@
 
 All notable changes to HyperSense.
 
+## [0.15.2] - 2025-12-29
+
+### Fixed
+- **Excessive sync_account Execution Logs** - Removed success logging from `AccountManager.fetch_account_state`
+  - Read operations no longer create ExecutionLog records (they are not execution events)
+  - Failure logging preserved to track API errors
+  - Fixes dashboard showing many "Sync Account" entries from frequent dashboard refreshes and RiskMonitoringJob runs
+- **LLM::Client Tests Environment Independence** - Tests now stub `Settings.llm.provider` to `anthropic`
+  - Tests no longer fail when `LLM_PROVIDER` environment variable is set to a different provider
+
 ## [0.15.1] - 2025-12-29
 
 ### Fixed
@@ -31,12 +41,7 @@ rails db:create db:migrate
   - Pagination support with meta information
   - Statistics endpoint showing success rate and action breakdown
 
-### Frontend (0.4.0)
-- `ExecutionLogsPage` - New page with DataTable and filters
-- `executionLogsApi` - API client methods for execution logs
-- `useExecutionLogsList`, `useExecutionLogsStats` - React Query hooks
-- Navigation link "Exec Logs" added to header
-- Route `/execution-logs` added
+### Support Frontend (0.4.0)
 
 ### Technical Details
 - 11 new request spec examples for ExecutionLogsController

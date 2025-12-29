@@ -56,13 +56,9 @@ RSpec.describe Execution::AccountManager do
       expect(result[:available_margin]).to eq(8_000.0)
     end
 
-    it "creates an execution log on success" do
+    it "does not create execution log on successful read" do
       expect { manager.fetch_account_state }
-        .to change { ExecutionLog.count }.by(1)
-
-      log = ExecutionLog.last
-      expect(log.action).to eq("sync_account")
-      expect(log.status).to eq("success")
+        .not_to change { ExecutionLog.count }
     end
 
     context "when API fails" do
