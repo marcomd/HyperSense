@@ -3,6 +3,7 @@ services:
     image: postgres:16
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./docker/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
     environment:
       POSTGRES_USER: hypersense
       POSTGRES_PASSWORD: hypersense_dev

@@ -2,6 +2,26 @@
 
 All notable changes to HyperSense.
 
+## [0.15.1] - 2025-12-29
+
+### Fixed
+- **Docker Multi-Database Setup** - `docker-compose.yml` was only creating one database
+  - Added `docker/init-db.sql` initialization script that creates all required databases
+  - Creates development databases: `hypersense_development`, `_cache`, `_queue`, `_cable`
+  - Creates test databases: `hypersense_test`, `_cache`, `_queue`, `_cable`
+  - Grants privileges to `hypersense` user on all databases
+
+### Changed
+- `docker-compose.yml` now mounts init script to `/docker-entrypoint-initdb.d/`
+
+### Migration Notes
+If you have an existing PostgreSQL volume, you must recreate it for the init script to run:
+```bash
+docker compose down -v   # WARNING: Deletes all data
+docker compose up -d
+rails db:create db:migrate
+```
+
 ## [0.15.0] - 2025-12-28
 
 ### Added
