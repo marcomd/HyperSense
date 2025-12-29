@@ -46,6 +46,13 @@ Rails.application.routes.draw do
           get :current
         end
       end
+
+      # Execution Logs
+      resources :execution_logs, only: [ :index, :show ] do
+        collection do
+          get :stats
+        end
+      end
     end
   end
 

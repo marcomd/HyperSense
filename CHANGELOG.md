@@ -2,6 +2,27 @@
 
 All notable changes to HyperSense.
 
+## [0.15.0] - 2025-12-28
+
+### Added
+- **Execution Logs Dashboard** - New page to view and filter execution logs
+  - `Api::V1::ExecutionLogsController` - REST API with index, show, stats endpoints
+  - Filters: status (success/failure), log_action (place_order, cancel_order, etc.), date range
+  - Pagination support with meta information
+  - Statistics endpoint showing success rate and action breakdown
+
+### Frontend (0.4.0)
+- `ExecutionLogsPage` - New page with DataTable and filters
+- `executionLogsApi` - API client methods for execution logs
+- `useExecutionLogsList`, `useExecutionLogsStats` - React Query hooks
+- Navigation link "Exec Logs" added to header
+- Route `/execution-logs` added
+
+### Technical Details
+- 11 new request spec examples for ExecutionLogsController
+- Used `log_action` parameter instead of `action` (reserved Rails param)
+- All tests passing, RuboCop and ESLint clean
+
 ## [0.14.0] - 2025-12-28
 
 ### Added
