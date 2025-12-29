@@ -331,7 +331,8 @@ module Reasoning
           operation: data[:operation],
           direction: data[:direction],
           confidence: data[:confidence],
-          status: "pending"
+          status: "pending",
+          llm_model: @client.model
         )
       else
         @logger.warn "[LowLevelAgent] Invalid response for #{symbol}: #{parsed[:errors].join(', ')}"
@@ -344,7 +345,8 @@ module Reasoning
           operation: "hold",
           confidence: 0.0,
           status: "rejected",
-          rejection_reason: "Invalid LLM response: #{parsed[:errors].join(', ')}"
+          rejection_reason: "Invalid LLM response: #{parsed[:errors].join(', ')}",
+          llm_model: @client.model
         )
       end
     end
@@ -359,7 +361,8 @@ module Reasoning
         operation: "hold",
         confidence: 0.0,
         status: "rejected",
-        rejection_reason: error_message
+        rejection_reason: error_message,
+        llm_model: @client.model
       )
     end
 

@@ -78,6 +78,12 @@ RSpec.describe Reasoning::HighLevelAgent do
         expect(strategy.llm_response).to be_a(Hash)
         expect(strategy.llm_response).to include("raw", "parsed")
       end
+
+      it "stores the llm_model" do
+        strategy = agent.analyze
+        expect(strategy.llm_model).to be_present
+        expect(strategy.llm_model).to eq(Settings.llm.send(Settings.llm.provider).model)
+      end
     end
 
     context "with invalid LLM response" do
@@ -102,6 +108,11 @@ RSpec.describe Reasoning::HighLevelAgent do
       it "includes error info in llm_response" do
         strategy = agent.analyze
         expect(strategy.llm_response).to include("errors")
+      end
+
+      it "stores the llm_model even on invalid response" do
+        strategy = agent.analyze
+        expect(strategy.llm_model).to be_present
       end
     end
 

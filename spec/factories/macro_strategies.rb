@@ -16,6 +16,7 @@ FactoryBot.define do
     context_used { { timestamp: Time.current.iso8601, assets: %w[BTC ETH SOL BNB] } }
     llm_response { { raw: "{}", parsed: {} } }
     valid_until { 24.hours.from_now }
+    llm_model { "claude-sonnet-4-5" }
 
     trait :bearish do
       market_narrative { "Market showing weakness, breaking below key support levels." }

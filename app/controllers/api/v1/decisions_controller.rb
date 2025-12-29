@@ -95,6 +95,7 @@ module Api
           stop_loss: decision.stop_loss,
           take_profit: decision.take_profit,
           reasoning: decision.reasoning,
+          llm_model: decision.llm_model,
           created_at: decision.created_at.iso8601
         }
 

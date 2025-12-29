@@ -49,6 +49,31 @@ RSpec.describe "Api::V1::Dashboard", type: :request do
       expect(market).to have_key("ETH")
       expect(market["BTC"]["price"]).to eq(100_000.0)
     end
+
+    it "includes llm_model in recent_decisions" do
+      decision = create(:trading_decision, symbol: "ETH", operation: "open", llm_model: "claude-sonnet-4-5")
+
+      get "/api/v1/dashboard"
+
+      json = response.parsed_body
+      recent = json["recent_decisions"].find { |d| d["id"] == decision.id }
+
+      expect(recent).to have_key("llm_model")
+      expect(recent["llm_model"]).to eq("claude-sonnet-4-5")
+    end
+
+    it "includes llm_model in macro_strategy" do
+      # Update the existing macro strategy instead of deleting
+      MacroStrategy.update_all(llm_model: "gemini-2.0-flash", valid_until: 1.day.from_now)
+
+      get "/api/v1/dashboard"
+
+      json = response.parsed_body
+      strategy = json["macro_strategy"]
+
+      expect(strategy).to have_key("llm_model")
+      expect(strategy["llm_model"]).to eq("gemini-2.0-flash")
+    end
   end
 
   describe "GET /api/v1/dashboard/account" do

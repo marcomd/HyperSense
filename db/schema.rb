@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2025_12_24_230459) do
+ActiveRecord::Schema[8.1].define(version: 2025_12_29_130949) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -55,6 +55,7 @@ ActiveRecord::Schema[8.1].define(version: 2025_12_24_230459) do
     t.jsonb "context_used", default: {}
     t.datetime "created_at", null: false
     t.jsonb "key_levels", default: {}
+    t.string "llm_model"
     t.jsonb "llm_response", default: {}
     t.text "market_narrative", null: false
     t.decimal "risk_tolerance", precision: 3, scale: 2, null: false
@@ -143,6 +144,7 @@ ActiveRecord::Schema[8.1].define(version: 2025_12_24_230459) do
     t.datetime "created_at", null: false
     t.string "direction"
     t.boolean "executed", default: false
+    t.string "llm_model"
     t.jsonb "llm_response", default: {}
     t.bigint "macro_strategy_id"
     t.string "operation"

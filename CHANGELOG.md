@@ -2,6 +2,23 @@
 
 All notable changes to HyperSense.
 
+## [0.16.0] - 2025-12-29
+
+### Added
+- **LLM Model Tracking** - Track which LLM model made each decision for debugging and performance analysis
+  - `llm_model` column added to `trading_decisions` table
+  - `llm_model` column added to `macro_strategies` table
+  - `Reasoning::LowLevelAgent` now stores `llm_model` when creating decisions
+  - `Reasoning::HighLevelAgent` now stores `llm_model` when creating macro strategies
+  - API controllers serialize `llm_model` in responses (decisions, macro_strategies, dashboard)
+
+### Technical Details
+- 1 new database migration (add_llm_model_to_decisions_and_strategies)
+- 6 new test examples for llm_model storage and serialization
+- All 556 examples passing, RuboCop clean
+
+### Support Frontend (0.5.0)
+
 ## [0.15.2] - 2025-12-29
 
 ### Fixed

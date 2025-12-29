@@ -86,6 +86,12 @@ RSpec.describe Reasoning::LowLevelAgent do
         decision = agent.decide(symbol: "BTC", macro_strategy: macro_strategy)
         expect(decision.status).to eq("pending")
       end
+
+      it "stores the llm_model" do
+        decision = agent.decide(symbol: "BTC", macro_strategy: macro_strategy)
+        expect(decision.llm_model).to be_present
+        expect(decision.llm_model).to eq(Settings.llm.send(Settings.llm.provider).model)
+      end
     end
 
     context "with hold decision response" do
@@ -137,6 +143,11 @@ RSpec.describe Reasoning::LowLevelAgent do
         decision = agent.decide(symbol: "BTC", macro_strategy: macro_strategy)
         expect(decision.confidence).to eq(0.0)
       end
+
+      it "stores the llm_model even on invalid response" do
+        decision = agent.decide(symbol: "BTC", macro_strategy: macro_strategy)
+        expect(decision.llm_model).to be_present
+      end
     end
 
     context "without macro_strategy" do
@@ -176,6 +187,11 @@ RSpec.describe Reasoning::LowLevelAgent do
       it "includes error in rejection reason" do
         decision = agent.decide(symbol: "BTC", macro_strategy: macro_strategy)
         expect(decision.rejection_reason).to include("Connection failed")
+      end
+
+      it "stores the llm_model even on API error" do
+        decision = agent.decide(symbol: "BTC", macro_strategy: macro_strategy)
+        expect(decision.llm_model).to be_present
       end
     end
 

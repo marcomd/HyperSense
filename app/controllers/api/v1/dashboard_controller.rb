@@ -151,6 +151,7 @@ module Api
           risk_tolerance: strategy.risk_tolerance.to_f,
           market_narrative: strategy.market_narrative,
           key_levels: strategy.key_levels,
+          llm_model: strategy.llm_model,
           valid_until: strategy.valid_until.iso8601,
           created_at: strategy.created_at.iso8601,
           stale: strategy.stale?
@@ -172,6 +173,7 @@ module Api
             confidence: d.confidence&.to_f,
             status: d.status,
             reasoning: d.reasoning&.truncate(REASONING_TRUNCATE_LENGTH),
+            llm_model: d.llm_model,
             created_at: d.created_at.iso8601
           }
         end

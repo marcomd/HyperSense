@@ -235,7 +235,8 @@ module Reasoning
         key_levels: data[:key_levels],
         context_used: context,
         llm_response: { "raw" => raw_response, "parsed" => data },
-        valid_until: Time.current + Settings.macro.refresh_interval_hours.hours
+        valid_until: Time.current + Settings.macro.refresh_interval_hours.hours,
+        llm_model: @client.model
       )
 
       @logger.info "[HighLevelAgent] Created macro strategy: bias=#{strategy.bias}, risk=#{strategy.risk_tolerance}"
@@ -253,7 +254,8 @@ module Reasoning
         key_levels: {},
         context_used: context,
         llm_response: { "raw" => raw_response, "errors" => errors },
-        valid_until: Time.current + 6.hours
+        valid_until: Time.current + 6.hours,
+        llm_model: @client.model
       )
     end
   end

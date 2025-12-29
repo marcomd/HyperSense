@@ -46,6 +46,7 @@ module Api
           bias: strategy.bias,
           risk_tolerance: strategy.risk_tolerance.to_f,
           market_narrative: strategy.market_narrative,
+          llm_model: strategy.llm_model,
           valid_until: strategy.valid_until.iso8601,
           stale: strategy.stale?,
           created_at: strategy.created_at.iso8601

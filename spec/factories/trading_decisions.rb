@@ -24,6 +24,7 @@ FactoryBot.define do
     confidence { 0.78 }
     executed { false }
     status { "pending" }
+    llm_model { "claude-sonnet-4-5" }
 
     trait :hold do
       operation { "hold" }
