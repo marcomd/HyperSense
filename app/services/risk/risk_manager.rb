@@ -75,7 +75,7 @@ module Risk
             take_profit: decision.take_profit,
             direction: decision.direction
           )
-          return result unless result[:valid]
+          return result unless result.approved?
         end
       elsif decision.operation == "close"
         result = validate_close_operation(decision)
@@ -90,30 +90,30 @@ module Risk
     # @param stop_loss [Numeric, nil] Stop-loss price
     # @param take_profit [Numeric, nil] Take-profit price
     # @param direction [String] "long" or "short"
-    # @return [Hash] { valid: Boolean, reason: String }
+    # @return [ValidationResult]
     def validate_risk_reward(entry_price:, stop_loss:, take_profit:, direction:)
-      return { valid: true } if stop_loss.nil? || take_profit.nil?
+      return ValidationResult.new(valid: true) if stop_loss.nil? || take_profit.nil?
 
       risk = (entry_price - stop_loss).abs
       reward = (take_profit - entry_price).abs
 
-      return { valid: true } if risk.zero?
+      return ValidationResult.new(valid: true) if risk.zero?
 
       ratio = reward / risk
       min_ratio = min_risk_reward_ratio
 
       if ratio < min_ratio
         if enforce_risk_reward_ratio?
-          return {
+          return ValidationResult.new(
             valid: false,
             reason: "Poor risk/reward ratio: #{ratio.round(2)} (minimum: #{min_ratio})"
-          }
+          )
         else
           @logger.warn "[RiskManager] Poor risk/reward ratio: #{ratio.round(2)} for #{direction} trade (warning only)"
         end
       end
 
-      { valid: true, ratio: ratio }
+      ValidationResult.new(valid: true)
     end
 
     # Calculate dollar amount at risk for a trade

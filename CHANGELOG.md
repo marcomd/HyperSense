@@ -2,6 +2,14 @@
 
 All notable changes to HyperSense.
 
+## [0.18.3] - 2025-12-30
+
+### Fixed
+- **RiskManager validate_risk_reward Return Type** - `validate_risk_reward` was returning a plain Hash instead of `ValidationResult` struct
+  - `TradingCycleJob` crashed with `undefined method 'approved?' for an instance of Hash`
+  - Changed all `{ valid: true/false, reason: "..." }` returns to `ValidationResult.new(valid: ..., reason: ...)`
+  - Updated internal check from `result[:valid]` to `result.approved?` for consistency
+
 ## [0.18.2] - 2025-12-30
 
 ### Fixed
