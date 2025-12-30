@@ -2,6 +2,14 @@
 
 All notable changes to HyperSense.
 
+## [0.18.2] - 2025-12-30
+
+### Fixed
+- **Forecasts Page Blank** - Fixed BigDecimal serialization in forecast API responses
+  - `predicted_change_pct` returned BigDecimal which JSON serialized as string
+  - Added `.to_f` conversion in `serialize_forecast` and `serialize_forecast_list` methods
+  - Fixes: `forecast.change_pct.toFixed is not a function` JavaScript error
+
 ## [0.18.1] - 2025-12-30
 
 ### Removed

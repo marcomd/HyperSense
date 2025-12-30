@@ -178,7 +178,7 @@ module Api
           current_price: forecast.current_price.to_f,
           predicted_price: forecast.predicted_price.to_f,
           direction: forecast.direction,
-          change_pct: forecast.predicted_change_pct,
+          change_pct: forecast.predicted_change_pct.to_f,
           forecast_for: forecast.forecast_for.iso8601,
           created_at: forecast.created_at.iso8601
         }
@@ -192,7 +192,7 @@ module Api
           current_price: forecast.current_price.to_f,
           predicted_price: forecast.predicted_price.to_f,
           direction: forecast.direction,
-          change_pct: forecast.predicted_change_pct,
+          change_pct: forecast.predicted_change_pct.to_f,
           forecast_for: forecast.forecast_for.iso8601,
           created_at: forecast.created_at.iso8601
         }
