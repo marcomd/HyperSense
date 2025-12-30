@@ -2,6 +2,43 @@
 
 All notable changes to HyperSense.
 
+## [0.16.2] - 2025-12-29
+
+### Fixed
+- **pg gem Segmentation Fault** - Pinned pg gem to version 1.5.x to avoid segfaults on macOS ARM64 with Ruby 3.4
+  - pg 1.6.x has bugs that cause segfaults in `connect_start`/`connect_poll` after fork()
+  - This primarily affects Solid Queue worker processes
+  - pg 1.5.9 is stable and does not have these issues
+
+### Technical Details
+- Root cause: pg 1.6.x precompiled binaries segfault on macOS ARM64 (Apple Silicon) with Ruby 3.4
+- The segfault occurs in libpq connection establishment after Solid Queue forks worker processes
+- Even source-compiled pg 1.6.x crashed, indicating the issue is in the pg gem code itself
+- Solution: Pin `gem "pg", "~> 1.5.0"` in Gemfile
+- Also updated `config/queue.yml` to use `processes: 0` by default (in-process workers)
+
+## [0.16.1] - 2025-12-29
+
+### Fixed
+- **Database Connection Health Check** - Jobs now verify database connectivity before execution
+  - Added `before_perform :ensure_database_connection` callback to `ApplicationJob`
+  - Checks if connection is active, reconnects if stale
+  - Flushes dead connections from the pool via `connection_pool.flush!`
+  - Prevents pg gem segfaults on stale/broken connections
+
+### Added
+- **Automatic Retry on Connection Errors** - Jobs now retry on database connection failures
+  - `retry_on ActiveRecord::ConnectionNotEstablished` (3 attempts, 5s wait)
+  - `retry_on PG::ConnectionBad` (3 attempts, 5s wait)
+- **ApplicationJob Tests** - New spec file `spec/jobs/application_job_spec.rb`
+  - Tests for active connection, stale connection reconnect, connection failure handling
+  - Tests for retry configuration
+
+### Technical Details
+- Root cause: pg gem segfaults on stale connections instead of raising proper exceptions
+- Solution: Proactively check and reconnect before job execution
+- All 5 jobs (TradingCycle, MarketSnapshot, Forecast, MacroStrategy, RiskMonitoring) now inherit this protection
+
 ## [0.16.0] - 2025-12-29
 
 ### Added

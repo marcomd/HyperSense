@@ -3,7 +3,8 @@ source "https://rubygems.org"
 # Bundle edge Rails instead: gem "rails", github: "rails/rails", branch: "main"
 gem "rails", "~> 8.1.1"
 # Use postgresql as the database for Active Record
-gem "pg", "~> 1.1"
+# Pin to 1.5.x due to segfault bugs in 1.6.x on macOS ARM64 with Ruby 3.4
+gem "pg", "~> 1.5.0"
 # Use the Puma web server [https://github.com/puma/puma]
 gem "puma", ">= 5.0"
 
