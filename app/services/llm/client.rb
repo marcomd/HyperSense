@@ -73,18 +73,6 @@ module LLM
       raise LLM::APIError.new("LLM error: #{e.message}", original_error: e)
     end
 
-    # Get the current provider's configuration info
-    #
-    # @return [Hash] Provider configuration details
-    def provider_info
-      {
-        provider: @provider,
-        model: @model,
-        max_tokens: @max_tokens,
-        temperature: @temperature
-      }
-    end
-
     private
 
     # Validate that the provider is supported

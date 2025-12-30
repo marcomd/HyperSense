@@ -2,6 +2,11 @@
 
 All notable changes to HyperSense.
 
+## [0.18.1] - 2025-12-30
+
+### Removed
+- **Dead code cleanup** - Removed unused `LLM::Client#provider_info` method and its test
+
 ## [0.18.0] - 2025-12-30
 
 ### Fixed

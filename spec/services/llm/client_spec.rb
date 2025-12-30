@@ -284,20 +284,4 @@ RSpec.describe LLM::Client do
       end
     end
   end
-
-  describe "#provider_info" do
-    before do
-      allow(Settings.llm).to receive(:provider).and_return("anthropic")
-    end
-
-    let(:client) { described_class.new(max_tokens: 2000, temperature: 0.5) }
-
-    it "returns provider configuration details" do
-      info = client.provider_info
-      expect(info[:provider]).to eq("anthropic")
-      expect(info[:model]).to eq(Settings.llm.anthropic.model)
-      expect(info[:max_tokens]).to eq(2000)
-      expect(info[:temperature]).to eq(0.5)
-    end
-  end
 end
