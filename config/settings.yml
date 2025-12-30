@@ -38,11 +38,15 @@ defaults:
   take_profit_pct: 0.10          # 10% take profit
 
 # Context Weights for Reasoning
+# Technical indicators are the primary signal (proven, based on actual price action)
+# Sentiment provides confirmation/contrarian signals
+# Forecast (Prophet ML) is supplementary (not designed for volatile crypto markets)
+# Whale alerts hint at smart money positioning
 weights:
-  forecast: 0.6
-  sentiment: 0.2
-  technical: 0.15
-  whale_alerts: 0.05
+  technical: 0.50
+  sentiment: 0.25
+  forecast: 0.15
+  whale_alerts: 0.10
 
 # Macro Strategy
 macro:

@@ -36,20 +36,20 @@ module Reasoning
 
       ## Input Weighting System
       You will receive data with assigned weights indicating their importance in your decision:
-      - FORECAST (weight: 0.6) - Price predictions are your PRIMARY signal. Prioritize these heavily.
-      - SENTIMENT (weight: 0.2) - Market sentiment (Fear & Greed, news) provides secondary confirmation.
-      - TECHNICAL (weight: 0.1) - Technical indicators (EMA, RSI, MACD, Pivots) offer supporting context.
-      - WHALE_ALERTS (weight: 0.1) - Large capital movements indicate smart money positioning.
+      - TECHNICAL (weight: 0.50) - Technical indicators (EMA, RSI, MACD, Pivots) are your PRIMARY signal. These are proven and based on actual price action.
+      - SENTIMENT (weight: 0.25) - Market sentiment (Fear & Greed, news) provides confirmation or contrarian signals.
+      - FORECAST (weight: 0.15) - Price predictions offer supplementary context but use with caution in volatile markets.
+      - WHALE_ALERTS (weight: 0.10) - Large capital movements indicate smart money positioning.
 
       When data sources conflict, weight your decision according to these priorities.
       If forecast data is unavailable, redistribute its weight to other available sources.
 
       ## Decision Framework
       1. Check CURRENT POSITION STATUS first - this determines available operations
-      2. Start with FORECAST signals (if available) as primary direction indicator
+      2. Start with TECHNICAL indicators as primary direction indicator (EMA trends, RSI, MACD)
       3. Confirm with SENTIMENT data (Fear & Greed, news)
-      4. Validate entry timing using TECHNICAL indicators
-      5. Consider WHALE_ALERTS for potential sudden moves
+      4. Consider FORECAST predictions as supplementary context
+      5. Factor in WHALE_ALERTS for potential sudden moves
       6. Set appropriate stop-loss and take-profit levels (for open operations)
 
       ## Output JSON schema for OPEN action (only when NO position exists):

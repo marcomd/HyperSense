@@ -1,6 +1,6 @@
 # HyperSense
 
-**Version 0.18.3** | Autonomous AI Trading Agent for cryptocurrency markets.
+**Version 0.19.0** | Autonomous AI Trading Agent for cryptocurrency markets.
 
 ![HyperSense_cover1.jpg](docs/HyperSense_cover1.jpg)
 
@@ -340,10 +340,10 @@ risk:
 
 # Context Weights for Reasoning
 weights:
-  forecast: 0.6
-  sentiment: 0.2
-  technical: 0.15
-  whale_alerts: 0.05
+  technical: 0.50
+  sentiment: 0.25
+  forecast: 0.15
+  whale_alerts: 0.10
 ```
 
 ## Current Implementation
@@ -455,10 +455,10 @@ LLM agents receive data with assigned weights for prioritization.
 ```ruby
 # Context weights from settings.yml
 weights = {
-  forecast: 0.6,      # Price predictions (PRIMARY signal)
-  sentiment: 0.2,     # Fear & Greed + News
-  technical: 0.1,     # EMA, RSI, MACD, Pivots
-  whale_alerts: 0.1   # Large capital movements
+  technical: 0.50,    # EMA, RSI, MACD, Pivots (PRIMARY signal)
+  sentiment: 0.25,    # Fear & Greed + News
+  forecast: 0.15,     # Prophet ML price predictions
+  whale_alerts: 0.10  # Large capital movements
 }
 
 # Context assembler includes all weighted data
@@ -527,6 +527,61 @@ decisions = agent.decide_all(macro_strategy: MacroStrategy.active)
   "reasoning": "RSI neutral at 62, MACD bullish crossover, price above all EMAs"
 }
 ```
+
+### 4.1 Position Direction Evaluation (Long vs Short)
+
+HyperSense supports both **long** and **short** positions symmetrically. The direction decision follows a two-stage process:
+
+#### Stage 1: Macro Strategy Sets the Bias
+
+The `HighLevelAgent` (daily at 6am) analyzes weighted market data to set the trading bias:
+
+| Bias | Meaning | Favored Direction |
+|------|---------|-------------------|
+| **Bullish** | Market expected to rise | Long positions |
+| **Bearish** | Market expected to fall | Short positions |
+| **Neutral** | No clear direction | No directional preference |
+
+The bias is determined by weighted inputs:
+- **TECHNICAL (50%)** - EMA, RSI, MACD indicators (primary signal)
+- **SENTIMENT (25%)** - Fear & Greed Index + news
+- **FORECAST (15%)** - Prophet ML price predictions
+- **WHALE_ALERTS (10%)** - Large capital movements
+
+#### Stage 2: Low-Level Agent Aligns with Bias
+
+The `LowLevelAgent` (every 5 min) receives the macro context and follows this decision logic:
+
+| Position State | Signal | Macro Bias | Action |
+|----------------|--------|------------|--------|
+| No position | Bullish signals | Bullish | **Open LONG** |
+| No position | Bearish signals | Bearish | **Open SHORT** |
+| No position | Unclear signals | Any | HOLD |
+| Has position | Target reached | Any | CLOSE |
+| Has position | Trend continues | Any | HOLD |
+
+**Key insight**: The LLM is explicitly instructed (in the system prompt) to align trade direction with the macro bias. If the macro strategy is bullish, the agent will prefer long positions; if bearish, it will prefer shorts.
+
+#### Order Execution Mapping
+
+```
+direction: "long"  → Exchange order: side: "buy"
+direction: "short" → Exchange order: side: "sell"
+```
+
+#### PnL Calculation by Direction
+
+| Direction | Profit When | Loss When |
+|-----------|-------------|-----------|
+| **Long** | `current_price > entry_price` | `current_price < entry_price` |
+| **Short** | `current_price < entry_price` | `current_price > entry_price` |
+
+#### Stop-Loss / Take-Profit by Direction
+
+| Direction | SL Triggers When | TP Triggers When |
+|-----------|------------------|------------------|
+| **Long** | `price <= stop_loss_price` | `price >= take_profit_price` |
+| **Short** | `price >= stop_loss_price` | `price <= take_profit_price` |
 
 ### 5. Risk Validation
 
@@ -691,7 +746,7 @@ pm.update_prices
 - [x] Paper trading mode (already implemented in Phase 4)
 
 ### Phase 5.1: Predictive Modeling & Weighted Context ✅
-- [x] Weighted context system (forecast: 0.6, sentiment: 0.2, technical: 0.1, whale_alerts: 0.1)
+- [x] Weighted context system (technical: 0.50, sentiment: 0.25, forecast: 0.15, whale_alerts: 0.10)
 - [x] Prophet-based price forecasting (1m, 15m, 1h predictions)
 - [x] Forecast model with MAE/MAPE validation tracking
 - [x] News fetcher (RSS from coinjournal.net)

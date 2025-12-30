@@ -2,6 +2,21 @@
 
 All notable changes to HyperSense.
 
+## [0.19.0] - 2025-12-30
+
+### Added
+- **Position Direction Evaluation Documentation** - New README section explaining how long/short decisions are made
+  - Documents two-stage process: MacroStrategy sets bias, LowLevelAgent aligns decisions
+  - Includes decision logic table, order mapping, PnL calculation, and SL/TP trigger rules by direction
+  - Confirms both long and short positions are fully supported symmetrically
+
+### Changed
+- **Rebalanced Context Weights** - Technical indicators now primary signal instead of Prophet forecasts
+  - Previous: forecast 60%, sentiment 20%, technical 15%, whale_alerts 5%
+  - New: **technical 50%**, sentiment 25%, forecast 15%, whale_alerts 10%
+  - Rationale: Technical indicators (EMA, RSI, MACD) are proven and based on actual price action
+  - Prophet ML is better suited for business forecasting than volatile crypto markets
+
 ## [0.18.3] - 2025-12-30
 
 ### Fixed

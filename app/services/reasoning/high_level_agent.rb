@@ -18,18 +18,18 @@ module Reasoning
 
       ## Input Weighting System
       You will receive data with assigned weights indicating their importance:
-      - FORECAST (weight: 0.6) - Price predictions are the PRIMARY signal for bias direction.
-      - SENTIMENT (weight: 0.2) - Market sentiment (Fear & Greed, news) provides confirmation.
-      - TECHNICAL (weight: 0.1) - Technical indicators offer supporting context.
-      - WHALE_ALERTS (weight: 0.1) - Large capital movements indicate institutional positioning.
+      - TECHNICAL (weight: 0.50) - Technical indicators are the PRIMARY signal for bias direction. These are proven and based on actual price action.
+      - SENTIMENT (weight: 0.25) - Market sentiment (Fear & Greed, news) provides confirmation or contrarian signals.
+      - FORECAST (weight: 0.15) - Price predictions offer supplementary context but use with caution in volatile markets.
+      - WHALE_ALERTS (weight: 0.10) - Large capital movements indicate institutional positioning.
 
       Weight your analysis according to these priorities. If forecast data is unavailable,
       redistribute its weight proportionally to other available sources.
 
       ## Analysis Framework
-      1. Start with FORECAST signals to determine primary bias direction
+      1. Start with TECHNICAL indicators to determine primary bias direction (EMA trends, RSI, MACD across assets)
       2. Confirm with SENTIMENT (Fear & Greed, recent news)
-      3. Validate with TECHNICAL trends across assets
+      3. Consider FORECAST predictions as supplementary context
       4. Factor in WHALE_ALERTS for institutional sentiment
       5. Set risk tolerance based on signal agreement
 
