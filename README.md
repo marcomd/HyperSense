@@ -1,6 +1,6 @@
 # HyperSense
 
-**Version 0.16.2** | Autonomous AI Trading Agent for cryptocurrency markets.
+**Version 0.17.0** | Autonomous AI Trading Agent for cryptocurrency markets.
 
 ![HyperSense_cover1.jpg](docs/HyperSense_cover1.jpg)
 
@@ -79,6 +79,27 @@ HyperSense is an autonomous trading agent that operates in discrete cycles to an
 | Every 5 minutes | ForecastJob | analysis | Prophet price predictions (1m, 15m, 1h) |
 | Daily (6am) | MacroStrategyJob | analysis | High-level market analysis |
 
+### Background Jobs Dashboard
+
+HyperSense includes Mission Control Jobs for monitoring Solid Queue:
+
+**Access:** http://localhost:3000/jobs
+
+**Authentication:** HTTP Basic Auth (configure in `.env`)
+
+**Features:**
+- View all job queues (trading, analysis, data, risk)
+- Inspect pending and scheduled jobs
+- Monitor failed jobs with error details
+- Retry or discard failed jobs
+- View recurring job schedules
+
+**Configuration:**
+```bash
+MISSION_CONTROL_USER=admin
+MISSION_CONTROL_PASSWORD=your_secure_password
+```
+
 ### Trading Cycle (every 5 min)
 
 1. **Circuit breaker check** - halt if triggered
@@ -105,6 +126,7 @@ All day  → TradingCycleJob (5min) makes decisions within macro bias
 | Framework | Rails 8.1 API | Latest version |
 | Database | PostgreSQL 16 | Port 5433 (avoids local PG conflict) |
 | Job Queue | Solid Queue | No Redis needed! |
+| Job Dashboard | Mission Control Jobs | Web UI for Solid Queue |
 | Scheduling | recurring.yml | Built into Solid Queue |
 | LLM | ruby_llm gem | Multi-provider (Anthropic, Gemini, Ollama) |
 | Exchange | hyperliquid gem (forked) | Extend with write ops |

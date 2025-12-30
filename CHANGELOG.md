@@ -2,6 +2,20 @@
 
 All notable changes to HyperSense.
 
+## [0.17.0] - 2025-12-30
+
+### Added
+- **Mission Control Jobs Dashboard** - Web UI for monitoring Solid Queue background jobs
+  - Mount point at `/jobs` with HTTP Basic Auth protection
+  - View job queues, pending jobs, and failed jobs
+  - Retry or discard failed jobs from the UI
+  - `propshaft` gem for asset pipeline support in API-only mode
+
+### Configuration
+New environment variables in `.env`:
+- `MISSION_CONTROL_USER` - HTTP Basic Auth username (default: admin)
+- `MISSION_CONTROL_PASSWORD` - HTTP Basic Auth password (required)
+
 ## [0.16.2] - 2025-12-29
 
 ### Fixed

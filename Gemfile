@@ -50,8 +50,9 @@ gem "prophet-rb"             # Time series forecasting (Meta Prophet)
 # Hyperliquid DEX client (forked for write operations)
 gem "hyperliquid", github: "marcomd/hyperliquid", branch: "feature/add-eip-712-signing-and-exchange-operations"
 
-# Solid Queue Web UI (disabled for API-only mode - enable when adding admin UI)
-# gem "mission_control-jobs"
+# Solid Queue Web UI - dashboard for monitoring background jobs
+gem "mission_control-jobs"
+gem "propshaft"  # Asset pipeline required for Mission Control UI
 
 group :development, :test do
   # See https://guides.rubyonrails.org/debugging_rails_applications.html#debugging-with-the-debug-gem
