@@ -5,8 +5,9 @@ default: &default
   workers:
     - queues: "*"
       threads: 3
-      # processes: 0 runs workers in-process (no fork) - avoids pg gem segfault on macOS ARM64
-      processes: <%= ENV.fetch("JOB_CONCURRENCY", 0) %>
+      # processes: 1 with gssencmode: disable in database.yml
+      # (gssencmode fix prevents pg gem segfault on macOS ARM64)
+      processes: <%= ENV.fetch("JOB_CONCURRENCY", 1) %>
       polling_interval: 0.1
 
 development:

@@ -93,7 +93,6 @@ RSpec.describe LLM::Client do
   end
 
   describe "#chat" do
-    let(:client) { described_class.new(max_tokens: 1000, temperature: 0.3) }
     let(:system_prompt) { "You are a helpful assistant." }
     let(:user_prompt) { "Hello, world!" }
 
@@ -109,22 +108,76 @@ RSpec.describe LLM::Client do
         allow(mock_chat).to receive(:ask).and_return(mock_response)
       end
 
-      it "returns the response content" do
-        result = client.chat(system_prompt: system_prompt, user_prompt: user_prompt)
-        expect(result).to eq("Hello! How can I help you?")
+      context "with anthropic provider" do
+        before do
+          allow(Settings.llm).to receive(:provider).and_return("anthropic")
+        end
+
+        let(:client) { described_class.new(max_tokens: 1000, temperature: 0.3) }
+
+        it "returns the response content" do
+          result = client.chat(system_prompt: system_prompt, user_prompt: user_prompt)
+          expect(result).to eq("Hello! How can I help you?")
+        end
+
+        it "configures the chat with correct parameters (max_tokens)" do
+          expect(RubyLLM).to receive(:chat).with(model: client.model)
+          expect(mock_chat).to receive(:with_instructions).with(system_prompt)
+          expect(mock_chat).to receive(:with_temperature).with(0.3)
+          expect(mock_chat).to receive(:with_params).with({ max_tokens: 1000 })
+
+          client.chat(system_prompt: system_prompt, user_prompt: user_prompt)
+        end
       end
 
-      it "configures the chat with correct parameters" do
-        expect(RubyLLM).to receive(:chat).with(model: client.model)
-        expect(mock_chat).to receive(:with_instructions).with(system_prompt)
-        expect(mock_chat).to receive(:with_temperature).with(0.3)
-        expect(mock_chat).to receive(:with_params).with(max_tokens: 1000)
+      context "with gemini provider" do
+        before do
+          allow(Settings.llm).to receive(:provider).and_return("gemini")
+          allow(Settings.llm.gemini).to receive(:api_key).and_return("test-api-key")
+        end
 
-        client.chat(system_prompt: system_prompt, user_prompt: user_prompt)
+        let(:client) { described_class.new(max_tokens: 1000, temperature: 0.3) }
+
+        it "returns the response content" do
+          result = client.chat(system_prompt: system_prompt, user_prompt: user_prompt)
+          expect(result).to eq("Hello! How can I help you?")
+        end
+
+        it "configures the chat with correct parameters (generationConfig.maxOutputTokens)" do
+          expect(RubyLLM).to receive(:chat).with(model: client.model)
+          expect(mock_chat).to receive(:with_instructions).with(system_prompt)
+          expect(mock_chat).to receive(:with_temperature).with(0.3)
+          expect(mock_chat).to receive(:with_params).with({ generationConfig: { maxOutputTokens: 1000 } })
+
+          client.chat(system_prompt: system_prompt, user_prompt: user_prompt)
+        end
+      end
+
+      context "with ollama provider" do
+        before do
+          allow(Settings.llm).to receive(:provider).and_return("ollama")
+        end
+
+        let(:client) { described_class.new(max_tokens: 1000, temperature: 0.3) }
+
+        it "returns the response content" do
+          result = client.chat(system_prompt: system_prompt, user_prompt: user_prompt)
+          expect(result).to eq("Hello! How can I help you?")
+        end
+
+        it "configures the chat with correct parameters (max_tokens)" do
+          expect(RubyLLM).to receive(:chat).with(model: client.model)
+          expect(mock_chat).to receive(:with_instructions).with(system_prompt)
+          expect(mock_chat).to receive(:with_temperature).with(0.3)
+          expect(mock_chat).to receive(:with_params).with({ max_tokens: 1000 })
+
+          client.chat(system_prompt: system_prompt, user_prompt: user_prompt)
+        end
       end
     end
 
     context "with rate limit error" do
+      let(:client) { described_class.new(max_tokens: 1000, temperature: 0.3) }
       let(:rate_limit_error) do
         error = RubyLLM::RateLimitError.allocate
         error.instance_variable_set(:@message, "Too many requests")
@@ -133,6 +186,7 @@ RSpec.describe LLM::Client do
       end
 
       before do
+        allow(Settings.llm).to receive(:provider).and_return("anthropic")
         allow(RubyLLM).to receive(:chat).and_raise(rate_limit_error)
       end
 
@@ -151,6 +205,7 @@ RSpec.describe LLM::Client do
     end
 
     context "with authentication error" do
+      let(:client) { described_class.new(max_tokens: 1000, temperature: 0.3) }
       let(:auth_error) do
         error = RubyLLM::UnauthorizedError.allocate
         error.instance_variable_set(:@message, "Invalid API key")
@@ -159,6 +214,7 @@ RSpec.describe LLM::Client do
       end
 
       before do
+        allow(Settings.llm).to receive(:provider).and_return("anthropic")
         allow(RubyLLM).to receive(:chat).and_raise(auth_error)
       end
 
@@ -169,6 +225,7 @@ RSpec.describe LLM::Client do
     end
 
     context "with server error" do
+      let(:client) { described_class.new(max_tokens: 1000, temperature: 0.3) }
       let(:server_error) do
         error = RubyLLM::ServerError.allocate
         error.instance_variable_set(:@message, "Internal server error")
@@ -177,6 +234,7 @@ RSpec.describe LLM::Client do
       end
 
       before do
+        allow(Settings.llm).to receive(:provider).and_return("anthropic")
         allow(RubyLLM).to receive(:chat).and_raise(server_error)
       end
 
@@ -187,10 +245,12 @@ RSpec.describe LLM::Client do
     end
 
     context "with empty response" do
+      let(:client) { described_class.new(max_tokens: 1000, temperature: 0.3) }
       let(:mock_response) { double("response", content: nil) }
       let(:mock_chat) { double("chat") }
 
       before do
+        allow(Settings.llm).to receive(:provider).and_return("anthropic")
         allow(RubyLLM).to receive(:chat).and_return(mock_chat)
         allow(mock_chat).to receive(:with_instructions).and_return(mock_chat)
         allow(mock_chat).to receive(:with_temperature).and_return(mock_chat)
@@ -205,10 +265,12 @@ RSpec.describe LLM::Client do
     end
 
     context "with blank response" do
+      let(:client) { described_class.new(max_tokens: 1000, temperature: 0.3) }
       let(:mock_response) { double("response", content: "   ") }
       let(:mock_chat) { double("chat") }
 
       before do
+        allow(Settings.llm).to receive(:provider).and_return("anthropic")
         allow(RubyLLM).to receive(:chat).and_return(mock_chat)
         allow(mock_chat).to receive(:with_instructions).and_return(mock_chat)
         allow(mock_chat).to receive(:with_temperature).and_return(mock_chat)

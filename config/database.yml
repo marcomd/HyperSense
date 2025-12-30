@@ -10,6 +10,9 @@ default: &default
   adapter: postgresql
   encoding: unicode
   pool: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
+  # Disable GSSAPI encryption to prevent segfaults on macOS ARM64 with pg gem
+  # See: https://github.com/ged/ruby-pg/issues/538
+  gssencmode: disable
 
 development:
   primary:

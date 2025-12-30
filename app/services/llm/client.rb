@@ -145,7 +145,25 @@ module LLM
       RubyLLM.chat(model: @model)
              .with_instructions(system_prompt)
              .with_temperature(@temperature)
-             .with_params(max_tokens: @max_tokens)
+             .with_params(**provider_params)
+    end
+
+    # Returns the provider-specific parameters for max tokens
+    #
+    # Different providers use different parameter names:
+    # - Anthropic: max_tokens (top level)
+    # - Ollama: max_tokens (top level, OpenAI-compatible)
+    # - Gemini: generationConfig.maxOutputTokens
+    #
+    # @return [Hash] Provider-specific parameters
+    def provider_params
+      case @provider
+      when "gemini"
+        { generationConfig: { maxOutputTokens: @max_tokens } }
+      else
+        # Anthropic and Ollama use max_tokens at top level
+        { max_tokens: @max_tokens }
+      end
     end
 
     # Extract text content from the response

@@ -2,6 +2,41 @@
 
 All notable changes to HyperSense.
 
+## [0.18.0] - 2025-12-30
+
+### Fixed
+- **pg gem Segmentation Fault on macOS ARM64** - Root cause identified and fixed
+  - The segfault was caused by GSSAPI/Kerberos authentication negotiation in pg gem
+  - Added `gssencmode: disable` to database.yml default configuration
+  - This disables GSS encryption which triggers the segfault on Apple Silicon
+  - See: https://github.com/ged/ruby-pg/issues/538
+- **LLM Client with_params Argument Error** - Fixed Ruby 3.4 keyword argument compatibility
+  - Changed `.with_params(provider_params)` to `.with_params(**provider_params)`
+  - Ruby 3.4 enforces strict separation between hash and keyword arguments
+  - Fixes: "wrong number of arguments (given 1, expected 0)"
+- **Solid Queue Workers Not Starting** - Restored worker process configuration
+  - Changed `processes: 0` back to `processes: 1` in queue.yml
+  - With gssencmode fix, forked worker processes now work correctly
+
+### Technical Details
+- The pg gem segfault was not specific to pg version (1.5.x and 1.6.x both affected)
+- The root cause is macOS Keychain/GSS interaction after fork() - known Ruby ecosystem issue
+- Updated queue.yml default JOB_CONCURRENCY from 0 to 1
+
+## [0.17.1] - 2025-12-30
+
+### Fixed
+- **Gemini LLM Provider max_tokens Error** - Gemini API uses `maxOutputTokens` inside `generationConfig` instead of `max_tokens`
+  - `LLM::Client#provider_params` now returns provider-specific parameter format
+  - Gemini: `{ generationConfig: { maxOutputTokens: value } }`
+  - Anthropic/Ollama: `{ max_tokens: value }` (unchanged)
+  - Fixes error: "Invalid JSON payload received. Unknown name 'max_tokens': Cannot find field."
+
+### Technical Details
+- Added `provider_params` private method to `LLM::Client` for provider-specific token limit handling
+- Updated `client_spec.rb` with separate test contexts for each provider's parameter format
+- All 23 LLM client tests passing
+
 ## [0.17.0] - 2025-12-30
 
 ### Added
