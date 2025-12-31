@@ -7,7 +7,6 @@ module Api
       # Display limits for dashboard components
       RECENT_POSITIONS_LIMIT = 10
       RECENT_DECISIONS_LIMIT = 5
-      REASONING_TRUNCATE_LENGTH = 100
 
       # Health check thresholds (minutes)
       MARKET_DATA_HEALTH_MINUTES = 5
@@ -173,7 +172,7 @@ module Api
             direction: d.direction,
             confidence: d.confidence&.to_f,
             status: d.status,
-            reasoning: d.reasoning&.truncate(REASONING_TRUNCATE_LENGTH),
+            reasoning: d.reasoning,
             llm_model: d.llm_model,
             created_at: d.created_at.iso8601
           }

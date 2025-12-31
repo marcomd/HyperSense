@@ -103,12 +103,12 @@ module Costs
     # @return [Hash] Pricing with input_per_million and output_per_million
     def model_pricing(provider, model)
       provider_settings = safe_setting_access(Settings.costs.llm, provider)
-      return free_pricing if provider_settings.nil?
+      return default_pricing if provider_settings.nil?
 
       model_settings = safe_setting_access(provider_settings, model)
       model_settings ||= safe_setting_access(provider_settings, "default")
 
-      return free_pricing if model_settings.nil?
+      return default_pricing if model_settings.nil?
 
       {
         input_per_million: model_settings.input_per_million.to_f,
@@ -126,9 +126,9 @@ module Costs
       nil
     end
 
-    # Free pricing for local models (ollama)
+    # Default pricing when model not found (zero cost)
     # @return [Hash] Zero-cost pricing
-    def free_pricing
+    def default_pricing
       { input_per_million: 0.0, output_per_million: 0.0 }
     end
 

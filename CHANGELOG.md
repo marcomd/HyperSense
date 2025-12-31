@@ -2,6 +2,13 @@
 
 All notable changes to HyperSense.
 
+## [0.21.1] - 2025-12-31
+
+### Fixed
+- **Dashboard reasoning truncation** - Removed server-side truncation of decision reasoning text
+  - Frontend now receives full reasoning text and handles truncation/expansion in UI
+  - Supports the new expandable "show more" feature in the dashboard
+
 ## [0.21.0] - 2025-12-31
 
 ### Added
