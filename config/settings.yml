@@ -53,7 +53,7 @@ macro:
   refresh_interval_hours: 24     # How often to refresh macro strategy
   lookback_days: 7               # Days of data for macro analysis
 
-# LLM Configuration (supports Anthropic, Gemini, Ollama)
+# LLM Configuration (supports Anthropic, Gemini, Ollama, OpenAI)
 llm:
   provider: <%= ENV.fetch('LLM_PROVIDER', 'anthropic') %>
   anthropic:
@@ -65,6 +65,9 @@ llm:
   ollama:
     api_base: <%= ENV.fetch('OLLAMA_API_BASE', 'http://localhost:11434/v1') %>
     model: <%= ENV.fetch('OLLAMA_MODEL', 'llama3') %>
+  openai:
+    api_key: <%= ENV.fetch('OPENAI_API_KEY', '') %>
+    model: <%= ENV.fetch('OPENAI_MODEL', 'gpt-5.2') %>
   high_level:
     max_tokens: 2000
     temperature: 0.3
@@ -123,3 +126,10 @@ costs:
       default:
         input_per_million: 0.00
         output_per_million: 0.00
+    openai:
+      gpt-5.2:
+        input_per_million: 1.75
+        output_per_million: 14.00
+      gpt-5-mini:
+        input_per_million: 0.25
+        output_per_million: 2.00

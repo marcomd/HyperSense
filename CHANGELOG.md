@@ -2,6 +2,37 @@
 
 All notable changes to HyperSense.
 
+## [0.22.0] - 2025-12-31
+
+### Added
+- **OpenAI provider support** - Added OpenAI as a new LLM provider option
+  - Supports `gpt-5.2` (default) and `gpt-5-mini` models
+  - Configure via `LLM_PROVIDER=openai` environment variable
+  - Requires `OPENAI_API_KEY` and optional `OPENAI_MODEL`
+  - Full cost tracking integration with pricing: $1.75/$14.00 per 1M tokens (gpt-5.2)
+  - 6 new tests for OpenAI provider support
+
+### Configuration
+New environment variables:
+```bash
+LLM_PROVIDER=openai
+OPENAI_API_KEY=your_openai_api_key
+OPENAI_MODEL=gpt-5.2  # or gpt-5-mini
+```
+
+New cost configuration in `config/settings.yml`:
+```yaml
+costs:
+  llm:
+    openai:
+      gpt-5.2:
+        input_per_million: 1.75
+        output_per_million: 14.00
+      gpt-5-mini:
+        input_per_million: 0.25
+        output_per_million: 2.00
+```
+
 ## [0.21.1] - 2025-12-31
 
 ### Fixed

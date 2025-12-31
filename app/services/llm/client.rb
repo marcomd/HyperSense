@@ -6,7 +6,7 @@ module LLM
   # LLM-agnostic client wrapper for ruby_llm
   #
   # Provides a unified interface for interacting with different LLM providers
-  # (Anthropic, Gemini, Ollama) based on the LLM_PROVIDER environment variable.
+  # (Anthropic, Gemini, Ollama, OpenAI) based on the LLM_PROVIDER environment variable.
   #
   # @example Basic usage
   #   client = LLM::Client.new(max_tokens: 1500, temperature: 0.3)
@@ -18,7 +18,7 @@ module LLM
   #
   class Client
     # Supported LLM providers
-    SUPPORTED_PROVIDERS = %w[anthropic gemini ollama].freeze
+    SUPPORTED_PROVIDERS = %w[anthropic gemini ollama openai].freeze
 
     # @return [String] The model identifier for the current provider
     attr_reader :model
@@ -94,6 +94,8 @@ module LLM
         validate_api_key!(Settings.llm.anthropic.api_key, "ANTHROPIC_API_KEY")
       when "gemini"
         validate_api_key!(Settings.llm.gemini.api_key, "GEMINI_API_KEY")
+      when "openai"
+        validate_api_key!(Settings.llm.openai.api_key, "OPENAI_API_KEY")
       when "ollama"
         # Ollama doesn't require an API key, just a running server
         nil
@@ -120,6 +122,8 @@ module LLM
         Settings.llm.anthropic.model
       when "gemini"
         Settings.llm.gemini.model
+      when "openai"
+        Settings.llm.openai.model
       when "ollama"
         Settings.llm.ollama.model
       end
@@ -140,6 +144,7 @@ module LLM
     #
     # Different providers use different parameter names:
     # - Anthropic: max_tokens (top level)
+    # - OpenAI: max_tokens (top level)
     # - Ollama: max_tokens (top level, OpenAI-compatible)
     # - Gemini: generationConfig.maxOutputTokens
     #

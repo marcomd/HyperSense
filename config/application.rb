@@ -19,7 +19,7 @@ require "action_cable/engine"
 Bundler.require(*Rails.groups)
 
 module Backend
-  VERSION = "0.21.1"
+  VERSION = "0.22.0"
 
   class Application < Rails::Application
     # Initialize configuration defaults for originally generated Rails version.

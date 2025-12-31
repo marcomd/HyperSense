@@ -90,6 +90,37 @@ RSpec.describe LLM::Client do
         expect(client.model).to eq(Settings.llm.ollama.model)
       end
     end
+
+    context "with openai provider" do
+      before do
+        allow(Settings.llm).to receive(:provider).and_return("openai")
+        allow(Settings.llm.openai).to receive(:api_key).and_return("test-api-key")
+      end
+
+      it "creates a client with openai provider" do
+        client = described_class.new
+        expect(client.provider).to eq("openai")
+      end
+
+      it "uses openai model from settings" do
+        client = described_class.new
+        expect(client.model).to eq(Settings.llm.openai.model)
+      end
+    end
+
+    context "with openai provider and missing API key" do
+      before do
+        allow(Settings.llm).to receive(:provider).and_return("openai")
+        allow(Settings.llm.openai).to receive(:api_key).and_return("")
+      end
+
+      it "raises ConfigurationError" do
+        expect { described_class.new }.to raise_error(
+          LLM::ConfigurationError,
+          /OPENAI_API_KEY is required/
+        )
+      end
+    end
   end
 
   describe "#chat" do
@@ -156,6 +187,29 @@ RSpec.describe LLM::Client do
       context "with ollama provider" do
         before do
           allow(Settings.llm).to receive(:provider).and_return("ollama")
+        end
+
+        let(:client) { described_class.new(max_tokens: 1000, temperature: 0.3) }
+
+        it "returns the response content" do
+          result = client.chat(system_prompt: system_prompt, user_prompt: user_prompt)
+          expect(result).to eq("Hello! How can I help you?")
+        end
+
+        it "configures the chat with correct parameters (max_tokens)" do
+          expect(RubyLLM).to receive(:chat).with(model: client.model)
+          expect(mock_chat).to receive(:with_instructions).with(system_prompt)
+          expect(mock_chat).to receive(:with_temperature).with(0.3)
+          expect(mock_chat).to receive(:with_params).with({ max_tokens: 1000 })
+
+          client.chat(system_prompt: system_prompt, user_prompt: user_prompt)
+        end
+      end
+
+      context "with openai provider" do
+        before do
+          allow(Settings.llm).to receive(:provider).and_return("openai")
+          allow(Settings.llm.openai).to receive(:api_key).and_return("test-api-key")
         end
 
         let(:client) { described_class.new(max_tokens: 1000, temperature: 0.3) }

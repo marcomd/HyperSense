@@ -1,6 +1,6 @@
 # HyperSense
 
-**Version 0.21.1** | Autonomous AI Trading Agent for cryptocurrency markets.
+**Version 0.22.0** | Autonomous AI Trading Agent for cryptocurrency markets.
 
 ![HyperSense_cover1.jpg](docs/HyperSense_cover1.jpg)
 
@@ -129,7 +129,7 @@ All day  → TradingCycleJob (5min) makes decisions within macro bias
 | Job Queue | Solid Queue | No Redis needed! |
 | Job Dashboard | Mission Control Jobs | Web UI for Solid Queue |
 | Scheduling | recurring.yml | Built into Solid Queue |
-| LLM | ruby_llm gem | Multi-provider (Anthropic, Gemini, Ollama) |
+| LLM | ruby_llm gem | Multi-provider (Anthropic, Gemini, Ollama, OpenAI) |
 | Exchange | hyperliquid gem (forked) | Extend with write ops |
 | Signing | eth gem | EIP-712 for Hyperliquid |
 | Frontend | React + Vite + TypeScript | Rich charting, React Router |
@@ -276,7 +276,7 @@ HyperSense/
    # For remote databases, use DATABASE_URL instead:
    # DATABASE_URL=postgresql://user:password@host:5432/hypersense
 
-   # LLM Provider: anthropic, gemini, or ollama
+   # LLM Provider: anthropic, gemini, ollama, or openai
    LLM_PROVIDER=anthropic
 
    # Anthropic (required if LLM_PROVIDER=anthropic)
@@ -286,6 +286,10 @@ HyperSense/
    # Gemini (required if LLM_PROVIDER=gemini)
    # GEMINI_API_KEY=your_gemini_api_key
    # GEMINI_MODEL=gemini-2.0-flash-exp
+
+   # OpenAI (required if LLM_PROVIDER=openai)
+   # OPENAI_API_KEY=your_openai_api_key
+   # OPENAI_MODEL=gpt-5.2
 
    # Ollama (required if LLM_PROVIDER=ollama)
    # OLLAMA_API_BASE=http://localhost:11434/v1
@@ -364,7 +368,11 @@ costs:
       claude-sonnet-4-5:
         input_per_million: 3.00
         output_per_million: 15.00
-    # ... other models
+    openai:
+      gpt-5.2:
+        input_per_million: 1.75
+        output_per_million: 14.00
+    # ... other models (gemini, ollama)
 ```
 
 ## Current Implementation

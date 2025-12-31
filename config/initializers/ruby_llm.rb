@@ -3,13 +3,14 @@
 # RubyLLM Configuration
 #
 # Configures the ruby_llm gem based on the LLM_PROVIDER environment variable.
-# Supports Anthropic, Gemini, and Ollama providers.
+# Supports Anthropic, Gemini, Ollama, and OpenAI providers.
 #
 # Configuration is loaded from config/settings.yml which reads from ENV vars:
-# - LLM_PROVIDER: anthropic, gemini, or ollama
+# - LLM_PROVIDER: anthropic, gemini, ollama, or openai
 # - ANTHROPIC_API_KEY, ANTHROPIC_MODEL
 # - GEMINI_API_KEY, GEMINI_MODEL
 # - OLLAMA_API_BASE, OLLAMA_MODEL
+# - OPENAI_API_KEY, OPENAI_MODEL
 #
 RubyLLM.configure do |config|
   # Anthropic configuration
@@ -25,6 +26,11 @@ RubyLLM.configure do |config|
   # Ollama configuration (local LLM)
   if Settings.llm.ollama.api_base.present?
     config.ollama_api_base = Settings.llm.ollama.api_base
+  end
+
+  # OpenAI configuration
+  if Settings.llm.openai.api_key.present?
+    config.openai_api_key = Settings.llm.openai.api_key
   end
 
   # Connection settings

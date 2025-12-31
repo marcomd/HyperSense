@@ -92,6 +92,7 @@ module Costs
       case current_provider
       when "anthropic" then Settings.llm.anthropic.model
       when "gemini" then Settings.llm.gemini.model
+      when "openai" then Settings.llm.openai.model
       when "ollama" then Settings.llm.ollama.model
       else "unknown"
       end
