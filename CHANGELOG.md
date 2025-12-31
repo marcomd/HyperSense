@@ -2,6 +2,38 @@
 
 All notable changes to HyperSense.
 
+## [0.20.0] - 2025-12-30
+
+### Added
+- **Hyperliquid Write Operations** - Live trading now supported via EIP-712 signed exchange operations
+  - `HyperliquidClient#place_order` - Places market orders on Hyperliquid with configurable slippage
+  - `HyperliquidClient#cancel_order` - Cancels orders by order ID
+  - `HyperliquidClient#update_leverage` - Placeholder for leverage updates (managed at account level)
+  - SDK now initialized with private key for exchange operations
+  - New `exchange` accessor for write operations via gem's Exchange module
+  - `validate_write_configuration!` helper to check credentials before trading
+
+- **OrderExecutor Live Trade Handling** - Full order lifecycle management for live trades
+  - Processes Hyperliquid order response (status, fill info, order ID)
+  - Creates Order records with proper status transitions (pending → submitted → filled)
+  - Creates/closes Position records based on fill price
+  - Handles error responses from exchange
+
+### Changed
+- `HyperliquidClient` - Updated documentation to reflect write operation support
+- `hyperliquid_client_spec.rb` - Updated tests for actual write operations (no longer stubs)
+
+### Configuration
+New setting `hyperliquid.slippage` in `config/settings.yml`:
+
+### Technical Details
+- Uses forked hyperliquid gem with EIP-712 signing: `github: "marcomd/hyperliquid", branch: "feature/add-eip-712-signing-and-exchange-operations"`
+- Market orders use IoC (Immediate or Cancel) with slippage protection
+- Stop-loss and take-profit monitoring remains local via RiskMonitoringJob (trigger orders planned for future)
+
+### Future Enhancement
+- **Trigger orders for SL/TP on exchange** - Place SL/TP as trigger orders on Hyperliquid for execution even when system is down
+
 ## [0.19.0] - 2025-12-30
 
 ### Added

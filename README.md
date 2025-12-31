@@ -1,6 +1,6 @@
 # HyperSense
 
-**Version 0.19.0** | Autonomous AI Trading Agent for cryptocurrency markets.
+**Version 0.20.0** | Autonomous AI Trading Agent for cryptocurrency markets.
 
 ![HyperSense_cover1.jpg](docs/HyperSense_cover1.jpg)
 

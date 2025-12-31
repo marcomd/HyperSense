@@ -79,6 +79,7 @@ hyperliquid:
   testnet_url: "https://api.hyperliquid-testnet.xyz"
   retry_attempts: 3                # Number of retry attempts for failed requests
   timeout: 30                      # Request timeout in seconds
+  slippage: 0.005                  # 0.5% slippage for market orders
 
 # API Rate Limits (requests per minute)
 rate_limits:
