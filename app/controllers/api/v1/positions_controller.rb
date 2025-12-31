@@ -25,15 +25,21 @@ module Api
       end
 
       # GET /api/v1/positions/open
-      # Returns only open positions
+      # Returns only open positions with fee information
       def open
         positions = Position.open.recent.includes(:orders)
+
+        total_fees = positions.sum(&:total_fees).round(2)
+        gross_pnl = positions.sum(&:unrealized_pnl).to_f.round(2)
 
         render json: {
           positions: positions.map { |p| serialize_position(p) },
           summary: {
             count: positions.count,
-            total_pnl: positions.sum(&:unrealized_pnl).to_f.round(2),
+            total_pnl: gross_pnl, # Keep for backward compatibility
+            gross_pnl: gross_pnl,
+            total_fees: total_fees,
+            net_pnl: (gross_pnl - total_fees).round(2),
             total_margin: positions.sum(&:margin_used).to_f.round(2)
           }
         }
@@ -46,7 +52,7 @@ module Api
       end
 
       # GET /api/v1/positions/performance
-      # Returns equity curve data for charting
+      # Returns equity curve data for charting with fee-adjusted metrics
       def performance
         days = (params[:days] || 30).to_i.clamp(1, 365)
         since = days.days.ago.beginning_of_day
@@ -57,17 +63,30 @@ module Api
                             .group("DATE(closed_at)")
                             .sum(:realized_pnl)
 
-        # Build equity curve
+        # Calculate fees for positions closed each day
+        fee_calculator = Costs::TradingFeeCalculator.new
+
+        # Build equity curve with fee data
         equity_curve = []
         cumulative = 0
+        cumulative_fees = 0
 
         (since.to_date..Date.current).each do |date|
           pnl = daily_pnl[date] || 0
           cumulative += pnl.to_f
+
+          # Calculate fees for positions closed on this day
+          day_positions = Position.closed.where(closed_at: date.all_day)
+          day_fees = day_positions.sum { |p| fee_calculator.for_position(p)[:total_fee] }
+          cumulative_fees += day_fees
+
           equity_curve << {
             date: date.to_s,
             daily_pnl: pnl.to_f.round(2),
-            cumulative_pnl: cumulative.round(2)
+            daily_fees: day_fees.round(4),
+            cumulative_pnl: cumulative.round(2),
+            cumulative_fees: cumulative_fees.round(4),
+            cumulative_net_pnl: (cumulative - cumulative_fees).round(2)
           }
         end
 
@@ -85,6 +104,8 @@ module Api
             losses: losses,
             win_rate: total.positive? ? (wins.to_f / total * 100).round(1) : 0,
             total_pnl: cumulative.round(2),
+            total_fees: cumulative_fees.round(4),
+            net_pnl: (cumulative - cumulative_fees).round(2),
             avg_win: wins.positive? ? closed_positions.where("realized_pnl > 0").average(:realized_pnl).to_f.round(2) : 0,
             avg_loss: losses.positive? ? closed_positions.where("realized_pnl < 0").average(:realized_pnl).to_f.round(2) : 0
           }
@@ -112,7 +133,14 @@ module Api
           opened_at: position.opened_at&.iso8601,
           closed_at: position.closed_at&.iso8601,
           close_reason: position.close_reason,
-          realized_pnl: position.realized_pnl&.to_f
+          realized_pnl: position.realized_pnl&.to_f,
+          # Fee information
+          fees: {
+            entry_fee: position.entry_fee,
+            exit_fee: position.exit_fee,
+            total_fees: position.total_fees,
+            net_pnl: position.net_pnl
+          }
         }
 
         if detailed

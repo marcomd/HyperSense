@@ -2,6 +2,42 @@
 
 All notable changes to HyperSense.
 
+## [0.21.0] - 2025-12-31
+
+### Added
+- **Cost Management System** - On-the-fly cost tracking for trading fees, LLM usage, and server costs
+  - `Costs::Calculator` - Main orchestrator combining all cost types, calculates net P&L
+  - `Costs::TradingFeeCalculator` - Calculates entry/exit fees based on position notional value
+  - `Costs::LLMCostCalculator` - Estimates LLM costs from call counts and token settings
+  - New `costs` section in `config/settings.yml` with configurable fee rates and LLM pricing
+  - Position model gains `entry_fee`, `exit_fee`, `total_fees`, `net_pnl`, `fee_breakdown` methods
+  - Dashboard controller adds `cost_summary` to response
+  - Positions controller adds fee info to all position responses
+  - New `/api/v1/costs` endpoints: `summary`, `llm`, `trading`
+
+### Configuration
+New `costs` section in `config/settings.yml`:
+```yaml
+costs:
+  trading:
+    taker_fee_pct: 0.000450   # 0.0450%
+    maker_fee_pct: 0.000150   # 0.0150%
+    default_order_type: taker
+  server:
+    monthly_cost: 15.00
+  llm:
+    anthropic:
+      claude-haiku-4-5:
+        input_per_million: 1.00
+        output_per_million: 5.00
+```
+
+### Technical Details
+- No database migrations required - all calculations are done on-the-fly
+- LLM costs estimated using 70% utilization factor and 3:1 input/output ratio
+- Hyperliquid fees: 0.0450% taker, 0.0150% maker per transaction
+- 43 new tests for cost services
+
 ## [0.20.0] - 2025-12-30
 
 ### Added

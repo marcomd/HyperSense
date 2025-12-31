@@ -87,3 +87,39 @@ rate_limits:
   coingecko: 50
   fear_greed: 10
   hyperliquid: 100
+
+# Cost Tracking Configuration
+# Used for on-the-fly cost calculations and net P&L reporting
+costs:
+  # Trading fees (Hyperliquid)
+  trading:
+    taker_fee_pct: 0.000450       # 0.0450% per transaction (market orders)
+    maker_fee_pct: 0.000150       # 0.0150% per transaction (limit orders)
+    default_order_type: taker     # Assume taker fees for market orders
+
+  # Server costs (monthly, in USD)
+  server:
+    monthly_cost: 15.00
+
+  # LLM costs (per 1 million tokens, in USD)
+  # Update these when pricing changes
+  llm:
+    anthropic:
+      claude-sonnet-4-5:
+        input_per_million: 3.00
+        output_per_million: 15.00
+      claude-haiku-4-5:
+        input_per_million: 1.00
+        output_per_million: 5.00
+    gemini:
+      gemini-2.0-flash-exp:
+        input_per_million: 0.50
+        output_per_million: 3.00
+      gemini-3-flash-preview:
+        input_per_million: 0.50
+        output_per_million: 3.00
+    ollama:
+      # Ollama is free (local inference)
+      default:
+        input_per_million: 0.00
+        output_per_million: 0.00

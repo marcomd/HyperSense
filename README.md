@@ -1,6 +1,6 @@
 # HyperSense
 
-**Version 0.20.0** | Autonomous AI Trading Agent for cryptocurrency markets.
+**Version 0.21.0** | Autonomous AI Trading Agent for cryptocurrency markets.
 
 ![HyperSense_cover1.jpg](docs/HyperSense_cover1.jpg)
 
@@ -14,6 +14,7 @@ HyperSense is an autonomous trading agent that operates in discrete cycles to an
 - **Multi-Agent Architecture**: High-level (macro strategy) + Low-level (trade execution) agents
 - **Technical Analysis**: EMA, RSI, MACD, Pivot Points
 - **Risk Management**: Position sizing, stop-loss, take-profit, confidence scoring
+- **Cost Tracking**: On-the-fly calculation of trading fees, LLM costs, and server costs with net P&L
 - **Real-time Dashboard**: React frontend with routing, filters, and detail pages
 
 ## Architecture
@@ -150,7 +151,8 @@ HyperSense/
 │   │   │       ├── decisions_controller.rb
 │   │   │       ├── market_data_controller.rb
 │   │   │       ├── macro_strategies_controller.rb
-│   │   │       └── execution_logs_controller.rb
+│   │   │       ├── execution_logs_controller.rb
+│   │   │       └── costs_controller.rb
 │   │   ├── jobs/                   # Solid Queue jobs
 │   │   │   ├── trading_cycle_job.rb
 │   │   │   ├── macro_strategy_job.rb
@@ -193,6 +195,10 @@ HyperSense/
 │   │       │   ├── position_sizer.rb     # Risk-based position sizing
 │   │       │   ├── stop_loss_manager.rb  # SL/TP enforcement
 │   │       │   └── circuit_breaker.rb    # Trading halt on losses
+│   │       ├── costs/
+│   │       │   ├── calculator.rb         # Main cost orchestrator
+│   │       │   ├── trading_fee_calculator.rb  # Hyperliquid fee calculations
+│   │       │   └── llm_cost_calculator.rb     # LLM API cost estimation
 │   │       └── trading_cycle.rb     # Main orchestrator
 │   ├── config/
 │   │   ├── settings.yml            # Trading parameters
@@ -344,6 +350,21 @@ weights:
   sentiment: 0.25
   forecast: 0.15
   whale_alerts: 0.10
+
+# Cost Tracking
+costs:
+  trading:
+    taker_fee_pct: 0.000450       # 0.0450% per transaction
+    maker_fee_pct: 0.000150       # 0.0150% per transaction
+    default_order_type: taker
+  server:
+    monthly_cost: 15.00           # Monthly server cost
+  llm:
+    anthropic:
+      claude-sonnet-4-5:
+        input_per_million: 3.00
+        output_per_million: 15.00
+    # ... other models
 ```
 
 ## Current Implementation
@@ -702,6 +723,67 @@ pm.sync_from_hyperliquid
 pm.update_prices
 ```
 
+### 8. Cost Management
+
+On-the-fly cost tracking for trading fees, LLM API costs, and server costs. No database migrations required - all calculations performed at query time.
+
+**Cost Calculator:**
+```ruby
+calculator = Costs::Calculator.new
+
+# Get cost summary for a period
+summary = calculator.summary(period: :today)
+# => {
+#   trading_fees: { total: 5.23, ... },
+#   llm_costs: { total: 0.12, provider: "anthropic", model: "claude-sonnet-4-5" },
+#   server_cost: { daily_rate: 0.50, monthly: 15.00 },
+#   total_costs: 5.85
+# }
+
+# Get net P&L (gross - trading fees)
+net = calculator.net_pnl(period: :today)
+# => { gross_realized_pnl: 150.0, trading_fees: 5.23, net_realized_pnl: 144.77 }
+```
+
+**Trading Fee Calculator:**
+```ruby
+fee_calc = Costs::TradingFeeCalculator.new
+
+# Fees for a specific position
+fees = fee_calc.for_position(position)
+# => { entry_fee: 4.50, exit_fee: 4.50, total_fees: 9.00, entry_notional: 10000 }
+
+# Estimate fees before trading
+fee_calc.estimate(notional_value: 10_000, round_trip: true)
+# => 9.00 (taker rate: 0.0450% × 2)
+```
+
+**Position Fee Methods:**
+```ruby
+position = Position.find_by(symbol: "BTC")
+position.entry_fee        # => 4.50
+position.exit_fee         # => 4.50
+position.total_fees       # => 9.00
+position.net_pnl          # => 140.50 (gross P&L - fees)
+position.fee_breakdown    # => { entry_fee: 4.50, exit_fee: 4.50, ... }
+```
+
+**LLM Cost Estimation:**
+```ruby
+llm_calc = Costs::LLMCostCalculator.new
+
+# Estimated costs based on call counts and token settings
+costs = llm_calc.estimated_costs(since: 24.hours.ago)
+# => {
+#   total: 0.12,
+#   provider: "anthropic",
+#   model: "claude-sonnet-4-5",
+#   call_count: 15,
+#   estimated_input_tokens: 45000,
+#   estimated_output_tokens: 15000
+# }
+```
+
 ---
 
 ## Development Status
@@ -766,6 +848,7 @@ pm.update_prices
 - [x] React Router with detail pages (decisions, strategies, forecasts, snapshots)
 - [x] Reusable filter components (date range, symbol, status, search, pagination)
 - [x] Paginated list endpoints with filters
+- [x] CostSummaryCard component (Trading fee, LLM cost estimation etc.)
 
 ### Phase 7: Production
 - [ ] Dockerfile
@@ -809,6 +892,9 @@ pm.update_prices
 | `/api/v1/execution_logs` | GET | Execution logs (paginated with filters) |
 | `/api/v1/execution_logs/:id` | GET | Single execution log details |
 | `/api/v1/execution_logs/stats` | GET | Execution statistics (success rate, by action) |
+| `/api/v1/costs/summary` | GET | Cost breakdown for period (trading fees, LLM, server) |
+| `/api/v1/costs/llm` | GET | Detailed LLM cost breakdown |
+| `/api/v1/costs/trading` | GET | Detailed trading fee breakdown |
 
 **WebSocket Channels:**
 
@@ -833,11 +919,12 @@ const markets = cable.subscriptions.create({ channel: "MarketsChannel", symbol: 
 
 - **AccountSummary** - Open positions count, unrealized PnL, margin used, daily P&L
 - **MarketOverview** - Current prices, RSI, MACD, EMA signals, forecasts for all assets
-- **PositionsTable** - Open positions with entry price, current price, PnL, SL/TP
+- **PositionsTable** - Open positions with entry price, current price, PnL (gross/net), SL/TP
 - **EquityCurve** - Cumulative PnL chart with win rate and statistics
 - **MacroStrategyCard** - Current market bias, risk tolerance, narrative, key levels
 - **DecisionLog** - Recent trading decisions with reasoning
 - **SystemStatus** - Health status of market data, trading cycle, macro strategy
+- **CostSummaryCard** - Net P&L, trading fees, LLM costs, server costs breakdown
 
 **Detail Pages (with React Router):**
 

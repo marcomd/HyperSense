@@ -56,6 +56,15 @@ Rails.application.routes.draw do
           get :stats
         end
       end
+
+      # Cost Tracking
+      resources :costs, only: [] do
+        collection do
+          get :summary
+          get :llm
+          get :trading
+        end
+      end
     end
   end
 

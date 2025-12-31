@@ -22,7 +22,8 @@ module Api
           market: market_overview,
           macro_strategy: current_macro_strategy,
           recent_decisions: recent_decisions,
-          system_status: system_status
+          system_status: system_status,
+          cost_summary: cost_summary
         }
       end
 
@@ -207,6 +208,31 @@ module Api
           },
           paper_trading: Settings.trading.paper_trading,
           assets_tracked: Settings.assets.to_a
+        }
+      end
+
+      # Build cost summary for dashboard display
+      #
+      # Calculates on-the-fly: trading fees, LLM costs, server costs.
+      # Returns net P&L (gross minus trading fees) for the current day.
+      #
+      # @return [Hash] Cost breakdown for today with net P&L
+      def cost_summary
+        calculator = Costs::Calculator.new
+
+        today_costs = calculator.summary(period: :today)
+        net_pnl = calculator.net_pnl(period: :today)
+
+        {
+          period: "today",
+          trading_fees: today_costs[:trading_fees][:total],
+          llm_costs: today_costs[:llm_costs][:total],
+          server_cost_daily: today_costs[:server_cost][:daily_rate],
+          total_costs: today_costs[:total_costs],
+          gross_realized_pnl: net_pnl[:gross_realized_pnl],
+          net_realized_pnl: net_pnl[:net_realized_pnl],
+          llm_provider: today_costs[:llm_costs][:provider],
+          llm_model: today_costs[:llm_costs][:model]
         }
       end
     end
