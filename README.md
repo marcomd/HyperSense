@@ -1,6 +1,6 @@
 # HyperSense
 
-**Version 0.26.0** | Autonomous AI Trading Agent for cryptocurrency markets.
+**Version 0.27.0** | Autonomous AI Trading Agent for cryptocurrency markets.
 
 ![HyperSense_cover1.jpg](docs/HyperSense_cover1.jpg)
 
@@ -702,13 +702,61 @@ position.risk_reward_ratio    # => 3.0
 position.stop_loss_distance_pct # => 5.0 (%)
 ```
 
-**Circuit Breaker:**
+**Circuit Breaker & `trading_allowed`:**
+
+The circuit breaker is a safety mechanism that automatically halts all trading when risk thresholds are breached. It protects against catastrophic losses during adverse market conditions or strategy failures.
+
+**What `trading_allowed` means:**
+- `true` - Trading engine can execute new trades normally
+- `false` - All trading is halted; the system will only monitor existing positions (SL/TP)
+
+**Trigger conditions** (any one triggers the breaker):
+
+| Condition | Setting | Default | Example |
+|-----------|---------|---------|---------|
+| Daily loss exceeds threshold | `max_daily_loss` | 5% | Lost $500 on $10,000 account |
+| Consecutive losing trades | `max_consecutive_losses` | 3 | 3 losses in a row |
+
+**How it works:**
+1. `RiskMonitoringJob` runs every minute and calls `check_and_update!`
+2. When a position closes with a loss, `record_loss(amount)` is called
+3. If thresholds are exceeded, `trigger!` halts trading and starts cooldown
+4. After cooldown (default 24h), trading resumes automatically
+5. Winning trades reset the consecutive losses counter
+
+**State storage:** Uses Rails.cache with automatic daily expiry for loss tracking.
+
+**API exposure:**
+- `/api/v1/health` returns `trading_allowed: true/false` (used by frontend Header)
+- Dashboard shows `circuit_breaker.daily_loss` and `circuit_breaker.consecutive_losses`
+
 ```ruby
 breaker = Risk::CircuitBreaker.new
-breaker.trading_allowed?   # => true/false
+
+# Check before any trade
+unless breaker.trading_allowed?
+  Rails.logger.warn "Circuit breaker active: #{breaker.trigger_reason}"
+  return # Skip trade execution
+end
+
+# After trades
 breaker.record_loss(500)   # Record losing trade
 breaker.record_win(200)    # Record winning trade (resets consecutive losses)
-breaker.status             # => { trading_allowed: true, daily_loss: 500, ... }
+
+# Full status
+breaker.status
+# => {
+#      trading_allowed: true,
+#      daily_loss: 500,
+#      daily_loss_pct: 0.05,
+#      consecutive_losses: 1,
+#      triggered: false,
+#      trigger_reason: nil,
+#      cooldown_until: nil
+#    }
+
+# Manual reset (admin use)
+breaker.reset!
 ```
 
 ### 7. Execution Layer (Paper Trading)
@@ -967,6 +1015,7 @@ costs = llm_calc.estimated_costs(since: 24.hours.ago)
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
+| `/api/v1/health` | GET | App status, version, paper_trading, trading_allowed |
 | `/api/v1/dashboard` | GET | Aggregated dashboard data |
 | `/api/v1/dashboard/account` | GET | Account summary |
 | `/api/v1/dashboard/system_status` | GET | System health status |

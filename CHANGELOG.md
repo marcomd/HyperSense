@@ -2,6 +2,38 @@
 
 All notable changes to HyperSense.
 
+## [0.27.0] - 2026-01-01
+
+### Changed
+- **Health Endpoint as Single Source of Truth** - `/api/v1/health` now provides all app-wide status
+  - Added `trading_allowed` field (circuit breaker status) to health endpoint
+  - Removed `trading_allowed` from dashboard's `circuit_breaker` object (DRY principle)
+  - Frontend uses `/health` for Header status indicators across all pages
+
+### API Changes
+- `GET /api/v1/health` - Now includes `trading_allowed` boolean:
+  ```json
+  {
+    "status": "ok",
+    "version": "0.27.0",
+    "environment": "development",
+    "paper_trading": false,
+    "trading_allowed": true,
+    "timestamp": "2026-01-01T14:30:00Z"
+  }
+  ```
+- `GET /api/v1/dashboard` - Account `circuit_breaker` no longer includes `trading_allowed`:
+  ```json
+  {
+    "circuit_breaker": {
+      "daily_loss": -50.0,
+      "consecutive_losses": 0
+    }
+  }
+  ```
+
+### Supports Frontend (0.10.0)
+
 ## [0.26.0] - 2026-01-01
 
 ### Added

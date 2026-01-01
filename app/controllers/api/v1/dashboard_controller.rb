@@ -43,8 +43,10 @@ module Api
 
       # Build account summary data for dashboard display
       #
-      # Aggregates open positions, realized PnL, circuit breaker status, and volatility info
+      # Aggregates open positions, realized PnL, circuit breaker details, and volatility info
       # from the most recent trading decision.
+      #
+      # Note: trading_allowed is not included here - it comes from /health endpoint (DRY principle).
       #
       # @return [Hash] Account summary with keys :open_positions_count, :total_unrealized_pnl,
       #   :total_margin_used, :realized_pnl_today, :paper_trading, :circuit_breaker, :volatility_info
@@ -71,7 +73,7 @@ module Api
           realized_pnl_today: realized_today.to_f.round(2),
           paper_trading: Settings.trading.paper_trading,
           circuit_breaker: {
-            trading_allowed: breaker_status[:trading_allowed],
+            # Note: trading_allowed comes from /health endpoint (single source of truth)
             daily_loss: breaker_status[:daily_loss]&.round(2),
             consecutive_losses: breaker_status[:consecutive_losses]
           },
