@@ -2,6 +2,19 @@
 
 All notable changes to HyperSense.
 
+## [0.26.0] - 2026-01-01
+
+### Added
+- **ATR in Macro Strategy Context** - ATR indicator now included in high-level agent reasoning
+  - `MarketSnapshot#atr_signal` - Returns volatility classification (:low_volatility, :normal_volatility, :high_volatility, :very_high_volatility)
+  - `ContextAssembler` - Now includes `atr_14` value and `atr` signal in technical indicators
+  - `HighLevelAgent` - Displays ATR value with volatility classification in assets overview prompt
+  - Uses 4-band volatility thresholds aligned with dynamic scheduling (< 1%, 1-2%, 2-3%, >= 3%)
+
+### Changed
+- `MarketSnapshot` - Added ATR threshold constants for volatility classification
+- Factory `:market_snapshot` - Now includes `atr_14` indicator with volatility traits
+
 ## [0.25.0] - 2026-01-01
 
 ### Added

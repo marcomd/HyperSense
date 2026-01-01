@@ -1,6 +1,6 @@
 # HyperSense
 
-**Version 0.25.0** | Autonomous AI Trading Agent for cryptocurrency markets.
+**Version 0.26.0** | Autonomous AI Trading Agent for cryptocurrency markets.
 
 ![HyperSense_cover1.jpg](docs/HyperSense_cover1.jpg)
 
@@ -406,7 +406,14 @@ snapshot = MarketSnapshot.latest_for("BTC")
 snapshot.price           # => 97000.0
 snapshot.rsi_signal      # => :neutral / :oversold / :overbought
 snapshot.macd_signal     # => :bullish / :bearish
+snapshot.atr_signal      # => :low_volatility / :normal_volatility / :high_volatility / :very_high_volatility
 snapshot.above_ema?(50)  # => true/false
+
+# ATR volatility bands (as % of price):
+# - :low_volatility       (ATR < 1%)
+# - :normal_volatility    (1% <= ATR < 2%)
+# - :high_volatility      (2% <= ATR < 3%)
+# - :very_high_volatility (ATR >= 3%)
 
 # Query historical data
 MarketSnapshot.for_symbol("ETH").last_hours(24)
@@ -430,6 +437,9 @@ calculator.rsi(prices, 14)   # 0-100, oversold < 30, overbought > 70
 
 # MACD
 calculator.macd(prices)      # { macd:, signal:, histogram: }
+
+# ATR (Average True Range) - Volatility indicator
+calculator.atr(candles, 14)  # Absolute ATR value
 
 # Pivot Points
 calculator.pivot_points(high, low, close)  # { pp:, r1:, r2:, s1:, s2: }
@@ -491,7 +501,7 @@ LLM agents receive data with assigned weights for prioritization.
 ```ruby
 # Context weights from settings.yml
 weights = {
-  technical: 0.50,    # EMA, RSI, MACD, Pivots (PRIMARY signal)
+  technical: 0.50,    # EMA, RSI, MACD, ATR, Pivots (PRIMARY signal)
   sentiment: 0.25,    # Fear & Greed + News
   forecast: 0.15,     # Prophet ML price predictions
   whale_alerts: 0.10  # Large capital movements
@@ -502,6 +512,10 @@ assembler = Reasoning::ContextAssembler.new(symbol: "BTC")
 context = assembler.for_trading(macro_strategy: MacroStrategy.active)
 # Includes: forecast, news, whale_alerts, market_data, technical_indicators, sentiment
 
+# Technical indicators include:
+# - EMA (20, 50, 100), RSI, MACD, Pivot Points
+# - ATR with volatility classification (low/normal/high/very_high)
+
 # LLM system prompt instructs to weight inputs accordingly:
 # "When data sources conflict, weight your decision according to these priorities."
 ```
@@ -509,6 +523,16 @@ context = assembler.for_trading(macro_strategy: MacroStrategy.active)
 ### 6. Macro Strategy (MacroStrategyJob - daily at 6am)
 
 High-level market analysis that sets the trading bias for the day.
+
+The macro strategy agent receives comprehensive market context including:
+- **Technical indicators**: EMA, RSI, MACD, ATR (with volatility classification), Pivot Points
+- **Market sentiment**: Fear & Greed Index, recent news
+- **Price forecasts**: Prophet ML predictions
+- **Whale alerts**: Large capital movements
+
+ATR volatility classification helps calibrate risk tolerance:
+- High ATR (volatile markets) → Lower risk tolerance recommended
+- Low ATR (calm markets) → Higher risk tolerance possible
 
 ```ruby
 # Runs daily at 6am via MacroStrategyJob

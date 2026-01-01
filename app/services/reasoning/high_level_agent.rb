@@ -202,9 +202,24 @@ module Reasoning
           - 24h Change: #{asset.dig(:market_data, :price_change_pct_24h)&.round(2)}%
           - RSI(14): #{asset.dig(:technical_indicators, :rsi_14)&.round(1)}
           - MACD Signal: #{asset.dig(:technical_indicators, :signals, :macd)}
+          - ATR(14): #{format_atr(asset)}
           - Above EMA-50: #{asset.dig(:technical_indicators, :signals, :above_ema_50)}
         ASSET
       end.join("\n")
+    end
+
+    # Format ATR value with volatility classification
+    #
+    # @param asset [Hash] Asset data from context assembler
+    # @return [String] Formatted ATR display (e.g., "2500.50 (high_volatility)")
+    def format_atr(asset)
+      atr_value = asset.dig(:technical_indicators, :atr_14)
+      atr_signal = asset.dig(:technical_indicators, :signals, :atr)
+
+      return "N/A" unless atr_value
+
+      signal_str = atr_signal ? " (#{atr_signal})" : ""
+      "#{atr_value.round(2)}#{signal_str}"
     end
 
     def format_historical_trends(trends)

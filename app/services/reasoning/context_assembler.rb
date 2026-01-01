@@ -159,11 +159,13 @@ module Reasoning
         ema_50: indicators["ema_50"],
         ema_100: indicators["ema_100"],
         rsi_14: indicators["rsi_14"],
+        atr_14: indicators["atr_14"],
         macd: indicators["macd"],
         pivot_points: indicators["pivot_points"],
         signals: {
           rsi: snapshot.rsi_signal,
           macd: snapshot.macd_signal,
+          atr: snapshot.atr_signal,
           above_ema_20: snapshot.above_ema?(20),
           above_ema_50: snapshot.above_ema?(50)
         }
