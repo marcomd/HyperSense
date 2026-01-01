@@ -1,6 +1,6 @@
 # HyperSense
 
-**Version 0.23.0** | Autonomous AI Trading Agent for cryptocurrency markets.
+**Version 0.25.0** | Autonomous AI Trading Agent for cryptocurrency markets.
 
 ![HyperSense_cover1.jpg](docs/HyperSense_cover1.jpg)
 
@@ -986,13 +986,13 @@ const markets = cable.subscriptions.create({ channel: "MarketsChannel", symbol: 
 
 **Dashboard Components:**
 
-- **AccountSummary** - Open positions count, unrealized PnL, margin used, daily P&L
-- **MarketOverview** - Current prices, RSI, MACD, EMA signals, forecasts for all assets
+- **AccountSummary** - Open positions, unrealized PnL, margin used, daily P&L, volatility badge
+- **MarketOverview** - Current prices, RSI, MACD, EMA signals, forecasts, volatility per coin
 - **PositionsTable** - Open positions with entry price, current price, PnL (gross/net), SL/TP
 - **EquityCurve** - Cumulative PnL chart with win rate and statistics
 - **MacroStrategyCard** - Current market bias, risk tolerance, narrative, key levels
-- **DecisionLog** - Recent trading decisions with reasoning
-- **SystemStatus** - Health status of market data, trading cycle, macro strategy
+- **DecisionLog** - Recent trading decisions with volatility badge, LLM model, reasoning
+- **SystemStatus** - Health status of market data, trading cycle, macro strategy, next cycle timing
 - **CostSummaryCard** - Net P&L, trading fees, LLM costs, server costs breakdown
 
 **Detail Pages (with React Router):**
@@ -1000,7 +1000,7 @@ const markets = cable.subscriptions.create({ channel: "MarketsChannel", symbol: 
 | Route | Page | Features |
 |-------|------|----------|
 | `/` | Dashboard | Main dashboard with all cards |
-| `/decisions` | DecisionsPage | Trading decisions with status, operation, symbol filters |
+| `/decisions` | DecisionsPage | Trading decisions with status, operation, symbol, volatility filters |
 | `/macro-strategies` | MacroStrategiesPage | Strategy history with bias filter, expandable narrative |
 | `/forecasts` | ForecastsPage | Price forecasts with symbol, timeframe, date filters |
 | `/market-snapshots` | MarketSnapshotsPage | Market snapshots with RSI/MACD signals, expandable indicators |

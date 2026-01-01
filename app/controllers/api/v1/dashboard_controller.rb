@@ -10,7 +10,8 @@ module Api
 
       # Health check thresholds (minutes)
       MARKET_DATA_HEALTH_MINUTES = 5
-      TRADING_CYCLE_HEALTH_MINUTES = 15
+      # Default trading cycle threshold - will be overridden by dynamic volatility-based interval
+      TRADING_CYCLE_HEALTH_MINUTES_DEFAULT = 30
 
       # GET /api/v1/dashboard
       # Returns all data needed for the main dashboard view
@@ -42,10 +43,11 @@ module Api
 
       # Build account summary data for dashboard display
       #
-      # Aggregates open positions, realized PnL, and circuit breaker status.
+      # Aggregates open positions, realized PnL, circuit breaker status, and volatility info
+      # from the most recent trading decision.
       #
       # @return [Hash] Account summary with keys :open_positions_count, :total_unrealized_pnl,
-      #   :total_margin_used, :realized_pnl_today, :paper_trading, :circuit_breaker
+      #   :total_margin_used, :realized_pnl_today, :paper_trading, :circuit_breaker, :volatility_info
       def account_summary
         open_positions = Position.open
 
@@ -59,6 +61,9 @@ module Api
         circuit_breaker = Risk::CircuitBreaker.new if defined?(Risk::CircuitBreaker)
         breaker_status = circuit_breaker&.status || { trading_allowed: true }
 
+        # Get volatility info from latest trading decision
+        latest_decision = TradingDecision.recent.first
+
         {
           open_positions_count: open_positions.count,
           total_unrealized_pnl: open_positions.sum(:unrealized_pnl).to_f.round(2),
@@ -69,7 +74,8 @@ module Api
             trading_allowed: breaker_status[:trading_allowed],
             daily_loss: breaker_status[:daily_loss]&.round(2),
             consecutive_losses: breaker_status[:consecutive_losses]
-          }
+          },
+          volatility_info: build_volatility_info(latest_decision)
         }
       end
 
@@ -160,7 +166,7 @@ module Api
 
       # Fetch and serialize recent trading decisions
       #
-      # Returns the 5 most recent trading decisions with key data.
+      # Returns the 5 most recent trading decisions with key data including volatility level.
       #
       # @return [Array<Hash>] Array of decision hashes
       def recent_decisions
@@ -173,6 +179,7 @@ module Api
             confidence: d.confidence&.to_f,
             status: d.status,
             reasoning: d.reasoning,
+            volatility_level: d.volatility_level,
             llm_model: d.llm_model,
             created_at: d.created_at.iso8601
           }
@@ -183,6 +190,7 @@ module Api
       #
       # Checks health of market data collection, trading cycle, and macro strategy.
       # A component is considered healthy if its last update is within expected intervals.
+      # Trading cycle threshold is dynamic based on the expected next_cycle_interval + buffer.
       #
       # @return [Hash] System status with health indicators for each component
       def system_status
@@ -191,13 +199,18 @@ module Api
         last_decision = TradingDecision.recent.first
         last_macro = MacroStrategy.recent.first
 
+        # Dynamic threshold: expected interval + 2 min buffer, or default fallback
+        trading_cycle_threshold = last_decision&.next_cycle_interval ?
+                                    last_decision.next_cycle_interval + 2 :
+                                    TRADING_CYCLE_HEALTH_MINUTES_DEFAULT
+
         {
           market_data: {
             healthy: last_snapshot && last_snapshot.captured_at > MARKET_DATA_HEALTH_MINUTES.minutes.ago,
             last_update: last_snapshot&.captured_at&.iso8601
           },
           trading_cycle: {
-            healthy: last_decision && last_decision.created_at > TRADING_CYCLE_HEALTH_MINUTES.minutes.ago,
+            healthy: last_decision && last_decision.created_at > trading_cycle_threshold.minutes.ago,
             last_run: last_decision&.created_at&.iso8601
           },
           macro_strategy: {
@@ -233,6 +246,37 @@ module Api
           llm_provider: today_costs[:llm_costs][:provider],
           llm_model: today_costs[:llm_costs][:model]
         }
+      end
+
+      # Build volatility information from the latest trading decision
+      #
+      # Returns volatility level, ATR value, next cycle interval, the scheduled
+      # time for the next trading cycle, and the configured intervals for each level.
+      #
+      # @param decision [TradingDecision, nil] The latest trading decision
+      # @return [Hash, nil] Volatility data or nil if no decision exists
+      def build_volatility_info(decision)
+        return nil unless decision
+
+        next_cycle_at = if decision.next_cycle_interval
+                          decision.created_at + decision.next_cycle_interval.minutes
+        end
+
+        {
+          volatility_level: decision.volatility_level,
+          atr_value: decision.atr_value&.to_f&.round(8),
+          next_cycle_interval: decision.next_cycle_interval,
+          next_cycle_at: next_cycle_at&.iso8601,
+          last_decision_at: decision.created_at.iso8601,
+          intervals: volatility_intervals
+        }
+      end
+
+      # Returns configured intervals for each volatility level from settings
+      #
+      # @return [Hash] Intervals in minutes keyed by volatility level
+      def volatility_intervals
+        Settings.volatility.intervals.to_h
       end
     end
   end

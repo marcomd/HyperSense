@@ -2,6 +2,64 @@
 
 All notable changes to HyperSense.
 
+## [0.25.0] - 2026-01-01
+
+### Added
+- **Volatility Intervals in Dashboard API** - Dashboard now exposes configured intervals for each volatility level
+  - `DashboardController#build_volatility_info` - Returns `intervals` object with timing configuration
+  - Enables frontend to display actual interval values without hardcoding
+  - Example response: `intervals: { very_high: 3, high: 6, medium: 12, low: 25 }`
+
+### API Changes
+- `GET /api/v1/dashboard` - Account summary `volatility_info` now includes `intervals` field:
+  ```json
+  {
+    "volatility_info": {
+      "volatility_level": "medium",
+      "atr_value": 0.015,
+      "next_cycle_interval": 12,
+      "next_cycle_at": "2026-01-01T14:30:00Z",
+      "last_decision_at": "2026-01-01T14:18:00Z",
+      "intervals": {
+        "very_high": 3,
+        "high": 6,
+        "medium": 12,
+        "low": 25
+      }
+    }
+  }
+  ```
+
+### Supports Frontend (0.9.0)
+
+## [0.24.0] - 2026-01-01
+
+### Added
+- **ATR Volatility API Exposure** - Volatility information now available in API responses
+  - `DecisionsController` - Serializes `volatility_level`, `atr_value`, `next_cycle_interval`
+  - `DashboardController` - Account summary includes `volatility_info` from latest decision
+  - `DashboardController` - Recent decisions now include `volatility_level` for dashboard display
+  - New filter: `volatility_level` parameter for `/api/v1/decisions` endpoint
+  - `llm_model` moved from list serialization to detailed view only
+
+### Changed
+- **Dynamic Trading Cycle Health Threshold** - `system_status.trading_cycle.healthy` now uses
+  dynamic threshold based on `next_cycle_interval` + 2 min buffer instead of hardcoded 15 min
+  - Prevents false "unhealthy" status when using longer intervals (e.g., 25 min for low volatility)
+
+### API Changes
+- `GET /api/v1/decisions` - Now includes volatility fields in response
+- `GET /api/v1/decisions?volatility_level=high` - New filter parameter
+- `GET /api/v1/dashboard` - Account summary includes `volatility_info` object with:
+  - `volatility_level` - Current volatility classification
+  - `atr_value` - Raw ATR percentage
+  - `next_cycle_interval` - Minutes until next trading cycle
+  - `next_cycle_at` - ISO8601 timestamp of next scheduled cycle
+  - `last_decision_at` - When the latest decision was made
+- `GET /api/v1/dashboard` - Recent decisions now include `volatility_level`
+
+### Supports Frontend (0.8.0)
+
 ## [0.23.0] - 2025-12-31
 
 ### Added

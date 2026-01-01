@@ -74,13 +74,28 @@ module Api
 
       private
 
+      # Applies query filters to the decisions collection
+      #
+      # Supports filtering by status, symbol, operation, and volatility_level.
+      #
+      # @param decisions [ActiveRecord::Relation] The base decisions query
+      # @return [ActiveRecord::Relation] The filtered decisions query
       def filter_decisions(decisions)
         decisions = decisions.where(status: params[:status]) if params[:status].present?
         decisions = decisions.for_symbol(params[:symbol].upcase) if params[:symbol].present?
         decisions = decisions.where(operation: params[:operation]) if params[:operation].present?
+        decisions = decisions.where(volatility_level: params[:volatility_level]) if params[:volatility_level].present?
         decisions
       end
 
+      # Serializes a trading decision for API response
+      #
+      # Includes core decision data plus volatility fields. The llm_model field
+      # is only included in detailed responses to keep list views compact.
+      #
+      # @param decision [TradingDecision] The decision to serialize
+      # @param detailed [Boolean] Whether to include full context details
+      # @return [Hash] The serialized decision data
       def serialize_decision(decision, detailed: false)
         data = {
           id: decision.id,
@@ -95,11 +110,14 @@ module Api
           stop_loss: decision.stop_loss,
           take_profit: decision.take_profit,
           reasoning: decision.reasoning,
-          llm_model: decision.llm_model,
+          volatility_level: decision.volatility_level,
+          atr_value: decision.atr_value&.to_f,
+          next_cycle_interval: decision.next_cycle_interval,
           created_at: decision.created_at.iso8601
         }
 
         if detailed
+          data[:llm_model] = decision.llm_model
           data[:target_position] = decision.target_position
           data[:context_sent] = decision.context_sent
           data[:llm_response] = decision.llm_response

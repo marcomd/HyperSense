@@ -74,6 +74,39 @@ RSpec.describe "Api::V1::Dashboard", type: :request do
       expect(strategy).to have_key("llm_model")
       expect(strategy["llm_model"]).to eq("gemini-2.0-flash")
     end
+
+    it "includes volatility_info in account summary" do
+      # Create the most recent decision with specific volatility
+      create(:trading_decision,
+        symbol: "ETH",
+        volatility_level: :high,
+        atr_value: 0.025,
+        next_cycle_interval: 6,
+        created_at: 1.second.from_now)
+
+      get "/api/v1/dashboard"
+
+      json = response.parsed_body
+      account = json["account"]
+
+      expect(account).to have_key("volatility_info")
+      expect(account["volatility_info"]["volatility_level"]).to eq("high")
+      expect(account["volatility_info"]["atr_value"]).to eq(0.025)
+      expect(account["volatility_info"]["next_cycle_interval"]).to eq(6)
+      expect(account["volatility_info"]).to have_key("next_cycle_at")
+      expect(account["volatility_info"]).to have_key("last_decision_at")
+    end
+
+    it "returns nil volatility_info when no decisions exist" do
+      TradingDecision.destroy_all
+
+      get "/api/v1/dashboard"
+
+      json = response.parsed_body
+      account = json["account"]
+
+      expect(account["volatility_info"]).to be_nil
+    end
   end
 
   describe "GET /api/v1/dashboard/account" do
@@ -87,6 +120,24 @@ RSpec.describe "Api::V1::Dashboard", type: :request do
 
       expect(json).to have_key("account")
       expect(json["account"]["open_positions_count"]).to eq(1)
+    end
+
+    it "includes volatility_info from latest trading decision" do
+      create(:trading_decision,
+        symbol: "ETH",
+        volatility_level: :very_high,
+        atr_value: 0.035,
+        next_cycle_interval: 3,
+        created_at: 2.minutes.ago)
+
+      get "/api/v1/dashboard/account"
+
+      json = response.parsed_body
+      account = json["account"]
+
+      expect(account["volatility_info"]["volatility_level"]).to eq("very_high")
+      expect(account["volatility_info"]["atr_value"]).to eq(0.035)
+      expect(account["volatility_info"]["next_cycle_interval"]).to eq(3)
     end
   end
 
