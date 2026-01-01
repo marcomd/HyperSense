@@ -62,14 +62,16 @@ class MarketSnapshotJob < ApplicationJob
     # Fetch current ticker data
     ticker = price_fetcher.fetch_ticker(asset)
 
-    # Fetch historical prices for indicators
-    prices = price_fetcher.fetch_prices_for_indicators(asset, interval: "1h", limit: 150)
+    # Fetch historical candles for indicators (OHLCV data)
+    candles = price_fetcher.fetch_klines(asset, interval: "1h", limit: 150)
+    prices = candles.map { |c| c[:close] }
 
-    # Calculate indicators
+    # Calculate indicators (including ATR from candles)
     indicators = indicator_calculator.calculate_all(
       prices,
       high: ticker[:high_24h],
-      low: ticker[:low_24h]
+      low: ticker[:low_24h],
+      candles: candles
     )
 
     # Create snapshot

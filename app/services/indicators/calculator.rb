@@ -7,6 +7,7 @@ module Indicators
   # - EMA (Exponential Moving Average)
   # - RSI (Relative Strength Index)
   # - MACD (Moving Average Convergence Divergence)
+  # - ATR (Average True Range) for volatility measurement
   # - Pivot Points (Support/Resistance levels)
   #
   # @example Basic usage
@@ -109,6 +110,40 @@ module Indicators
       }
     end
 
+    # Calculate ATR (Average True Range) for volatility measurement
+    #
+    # ATR measures market volatility using true range:
+    # - True Range = max(high - low, |high - prev_close|, |low - prev_close|)
+    # - ATR = EMA of True Range values over the specified period
+    #
+    # Higher ATR indicates more volatile markets, useful for:
+    # - Setting stop-loss distances
+    # - Determining position sizing
+    # - Adjusting trading frequency based on market conditions
+    #
+    # @param candles [Array<Hash>] OHLCV candle data with :high, :low, :close keys
+    # @param period [Integer] ATR period (default: 14)
+    # @return [Float, nil] Current ATR value, or nil if insufficient data
+    # @example
+    #   candles = [{ high: 110, low: 100, close: 105 }, ...]
+    #   calculator.atr(candles, 14)
+    #   # => 8.5
+    def atr(candles, period = 14)
+      return nil if candles.size < period + 1
+
+      # Calculate True Range for each candle (starting from index 1)
+      # True Range accounts for gaps between candles
+      true_ranges = candles.each_cons(2).map do |prev, curr|
+        high_low = curr[:high] - curr[:low]
+        high_close = (curr[:high] - prev[:close]).abs
+        low_close = (curr[:low] - prev[:close]).abs
+        [ high_low, high_close, low_close ].max
+      end
+
+      # Use EMA to smooth the true ranges
+      ema(true_ranges, period)
+    end
+
     # Calculate Pivot Points (Floor Trader Pivots)
     #
     # Pivot points are key support/resistance levels used by traders:
@@ -138,23 +173,25 @@ module Indicators
     # Calculate all indicators for an asset in a single call
     #
     # Convenience method that computes EMA (20, 50, 100), RSI (14),
-    # MACD, and optionally pivot points.
+    # MACD, pivot points, and optionally ATR.
     #
     # @param prices [Array<Numeric>] Price history (oldest first)
     # @param high [Numeric, nil] Period high (for pivot points)
     # @param low [Numeric, nil] Period low (for pivot points)
-    # @return [Hash] All calculated indicators with keys :ema_20, :ema_50, :ema_100, :rsi_14, :macd, :pivot_points
+    # @param candles [Array<Hash>, nil] OHLCV candle data (for ATR calculation)
+    # @return [Hash] All calculated indicators with keys :ema_20, :ema_50, :ema_100, :rsi_14, :macd, :pivot_points, :atr_14
     # @example
-    #   calculator.calculate_all(prices, high: 105, low: 95)
-    #   # => { ema_20: 102.5, ema_50: 100.0, ema_100: 98.5, rsi_14: 55.0, macd: {...}, pivot_points: {...} }
-    def calculate_all(prices, high: nil, low: nil)
+    #   calculator.calculate_all(prices, high: 105, low: 95, candles: candles)
+    #   # => { ema_20: 102.5, ema_50: 100.0, ema_100: 98.5, rsi_14: 55.0, macd: {...}, pivot_points: {...}, atr_14: 5.2 }
+    def calculate_all(prices, high: nil, low: nil, candles: nil)
       {
         ema_20: ema(prices, 20),
         ema_50: ema(prices, 50),
         ema_100: ema(prices, 100),
         rsi_14: rsi(prices, 14),
         macd: macd(prices),
-        pivot_points: high && low ? pivot_points(high, low, prices.last) : nil
+        pivot_points: high && low ? pivot_points(high, low, prices.last) : nil,
+        atr_14: candles ? atr(candles, 14) : nil
       }
     end
   end

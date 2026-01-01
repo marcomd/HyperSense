@@ -2,6 +2,44 @@
 
 All notable changes to HyperSense.
 
+## [0.23.0] - 2025-12-31
+
+### Added
+- **Dynamic Volatility-Based Job Scheduling** - Trading cycle interval now adjusts based on market volatility
+  - `Indicators::Calculator#atr` - ATR (Average True Range) indicator for volatility measurement
+  - `Indicators::VolatilityClassifier` - Classifies ATR into 4 levels with corresponding intervals
+  - `BootstrapTradingCycleJob` - Safety net job to ensure trading cycle chain is running
+  - Volatility levels: Very High (3 min), High (6 min), Medium (12 min), Low (25 min)
+  - TradingDecision gains `volatility_level`, `atr_value`, `next_cycle_interval` columns
+  - ForecastJob now runs 1 minute before each TradingCycleJob for fresh forecasts
+
+### Changed
+- `TradingCycleJob` - Now self-scheduling with dynamic intervals based on ATR volatility
+- `ForecastJob` - Removed from recurring.yml, now triggered by TradingCycleJob
+- `config/recurring.yml` - Added BootstrapTradingCycleJob (every 30 min safety net)
+
+### Configuration
+New `volatility` section in `config/settings.yml`:
+```yaml
+volatility:
+  thresholds:
+    very_high: 0.03   # >= 3% ATR
+    high: 0.02        # >= 2% ATR
+    medium: 0.01      # >= 1% ATR
+  intervals:
+    very_high: 3      # minutes
+    high: 6
+    medium: 12
+    low: 25
+  default_interval: 12
+```
+
+### Technical Details
+- 1 new database migration (`add_volatility_to_trading_decisions`)
+- ATR calculated using 14-period EMA of True Range
+- Bootstrap mechanism ensures chain restarts after app/worker restart
+- `ensure` block guarantees next job is always scheduled
+
 ## [0.22.0] - 2025-12-31
 
 ### Added

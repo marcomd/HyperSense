@@ -12,8 +12,24 @@ assets:
 
 # Trading Cycle Configuration
 trading:
-  cycle_interval_minutes: 5      # How often the trading cycle runs (3-15 min)
   paper_trading: true            # Enable paper trading mode (no real orders)
+
+# Volatility-Based Dynamic Scheduling
+# Trading cycle interval adjusts based on ATR (Average True Range)
+volatility:
+  # ATR thresholds as percentage of price
+  thresholds:
+    very_high: 0.03   # >= 3% ATR = Very High volatility
+    high: 0.02        # >= 2% ATR = High volatility
+    medium: 0.01      # >= 1% ATR = Medium volatility (below = Low)
+  # Corresponding trading cycle intervals in minutes
+  intervals:
+    very_high: 3      # 3 min - most frequent for volatile markets
+    high: 6           # 6 min
+    medium: 12        # 12 min - default
+    low: 25           # 25 min - least frequent for quiet markets
+  # Fallback interval when volatility cannot be determined
+  default_interval: 12
 
 # Risk Management
 risk:

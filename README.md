@@ -1,6 +1,6 @@
 # HyperSense
 
-**Version 0.22.0** | Autonomous AI Trading Agent for cryptocurrency markets.
+**Version 0.23.0** | Autonomous AI Trading Agent for cryptocurrency markets.
 
 ![HyperSense_cover1.jpg](docs/HyperSense_cover1.jpg)
 
@@ -10,9 +10,9 @@ HyperSense is an autonomous trading agent that operates in discrete cycles to an
 
 ### Key Features
 
-- **Autonomous Operation**: Runs every 3-15 minutes without human intervention
+- **Autonomous Operation**: Dynamic scheduling based on market volatility (3-25 minutes)
 - **Multi-Agent Architecture**: High-level (macro strategy) + Low-level (trade execution) agents
-- **Technical Analysis**: EMA, RSI, MACD, Pivot Points
+- **Technical Analysis**: EMA, RSI, MACD, ATR (volatility), Pivot Points
 - **Risk Management**: Position sizing, stop-loss, take-profit, confidence scoring
 - **Cost Tracking**: On-the-fly calculation of trading fees, LLM costs, and server costs with net P&L
 - **Real-time Dashboard**: React frontend with routing, filters, and detail pages
@@ -22,7 +22,7 @@ HyperSense is an autonomous trading agent that operates in discrete cycles to an
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    ORCHESTRATOR                             │
-│              (TradingCycleJob - every 5 min)                │
+│      (TradingCycleJob - dynamic 3-25 min based on ATR)      │
 │                   Via Solid Queue                           │
 └─────────────────────────────────────────────────────────────┘
                               │
@@ -32,18 +32,18 @@ HyperSense is an autonomous trading agent that operates in discrete cycles to an
 │   HIGH-LEVEL AGENT  │                │   LOW-LEVEL AGENT   │
 │   (Macro Strategist)│                │   (Trade Executor)  │
 ├─────────────────────┤                ├─────────────────────┤
-│ Frequency: Daily    │                │ Frequency: 5 min    │
-│ (6am or on-demand)  │                │                     │
-│                     │                │ Inputs:             │
-│ Inputs:             │                │ - Current prices    │
-│ - Weekly trends     │                │ - Live indicators   │
-│ - Macro sentiment   │                │ - Macro strategy    │
-│ - News/events       │                │                     │
-│                     │                │ Outputs:            │
-│ Outputs:            │                │ - Specific trades   │
-│ - Market narrative  │                │ - Entry/exit points │
-│ - Bias direction    │                │ - Position sizing   │
-│ - Risk tolerance    │                │                     │
+│ Frequency: Daily    │                │ Frequency: 3-25 min │
+│ (6am or on-demand)  │                │ (based on ATR)      │
+│                     │                │                     │
+│ Inputs:             │                │ Inputs:             │
+│ - Weekly trends     │                │ - Current prices    │
+│ - Macro sentiment   │                │ - Live indicators   │
+│ - News/events       │                │ - Macro strategy    │
+│                     │                │                     │
+│ Outputs:            │                │ Outputs:            │
+│ - Market narrative  │                │ - Specific trades   │
+│ - Bias direction    │                │ - Entry/exit points │
+│ - Risk tolerance    │                │ - Position sizing   │
 └─────────────────────┘                └─────────────────────┘
                               │
                               ▼
@@ -76,9 +76,16 @@ HyperSense is an autonomous trading agent that operates in discrete cycles to an
 |-----------|-----|-------|---------|
 | Every minute | MarketSnapshotJob | data | Fetch prices, calculate indicators |
 | Every minute | RiskMonitoringJob | risk | Monitor SL/TP, circuit breaker |
-| Every 5 minutes | TradingCycleJob | trading | Main trading orchestration |
-| Every 5 minutes | ForecastJob | analysis | Prophet price predictions (1m, 15m, 1h) |
+| Dynamic (3-25 min) | TradingCycleJob | trading | Main trading orchestration |
+| Dynamic (n-1 min) | ForecastJob | analysis | Prophet price predictions (1m, 15m, 1h) |
 | Daily (6am) | MacroStrategyJob | analysis | High-level market analysis |
+| Every 30 minutes | BootstrapTradingCycleJob | trading | Safety net to restart trading chain |
+
+**Dynamic Scheduling**: TradingCycleJob and ForecastJob use ATR-based volatility to determine intervals:
+- Very High volatility (ATR ≥ 3%): 3 min
+- High volatility (ATR ≥ 2%): 6 min
+- Medium volatility (ATR ≥ 1%): 12 min
+- Low volatility (ATR < 1%): 25 min
 
 ### Background Jobs Dashboard
 
@@ -734,6 +741,60 @@ pm.update_prices
 ### 8. Cost Management
 
 On-the-fly cost tracking for trading fees, LLM API costs, and server costs. No database migrations required - all calculations performed at query time.
+
+About LLM API costs, the cost calculator uses these assumptions:
+- Utilization factor: 70% of max_tokens used on average
+- Input/Output ratio: 3:1 (trading prompts have extensive market context)
+
+```
+Per-Call Token Estimates
+
+| Agent               | Max Output | Est. Output | Est. Input | Total/Call |
+|---------------------|------------|-------------|------------|------------|
+| Low-level (trading) | 1,500      | 1,050       | 3,150      | 4,200      |
+| High-level (macro)  | 2,000      | 1,400       | 4,200      | 5,600      |
+
+Daily Call Volume (at 5-min frequency)
+
+Trading cycles:    24 hours × 60 min ÷ 5 min = 288 cycles/day
+Assets per cycle:  4 (BTC, ETH, SOL, BNB)
+Total LLM calls:   288 × 4 = 1,152 calls/day
+Plus macro:        1 call/day
+
+Daily Token Totals
+
+Trading input:   1,152 calls × 3,150 tokens = 3,628,800 tokens
+Trading output:  1,152 calls × 1,050 tokens = 1,209,600 tokens
+Macro input:     4,200 tokens
+Macro output:    1,400 tokens
+─────────────────────────────────────────────────────────────
+Total input:     ~3.63M tokens/day
+Total output:    ~1.21M tokens/day
+
+---
+Corrected Daily Cost Calculation
+
+Formula: (input_tokens × input_price / 1M) + (output_tokens × output_price / 1M)
+
+| Model                | Input $/1M | Output $/1M | Input Cost | Output Cost | Daily Total |
+|----------------------|------------|-------------|------------|-------------|-------------|
+| claude-sonnet-4-5    | $3.00      | $15.00      | $10.89     | $18.15      | $29.04      |
+| gpt-5.2              | $1.75      | $14.00      | $6.35      | $16.94      | $23.29      |
+| claude-haiku-4-5     | $1.00      | $5.00       | $3.63      | $6.05       | $9.68       |
+| gemini-2.0-flash-exp | $0.50      | $3.00       | $1.82      | $3.63       | $5.45       |
+| gpt-5-mini           | $0.25      | $2.00       | $0.91      | $2.42       | $3.33       |
+
+---
+Monthly Cost Projection (30 days)
+
+| Model                | Daily  | Monthly |
+|----------------------|--------|---------|
+| claude-sonnet-4-5    | $29.04 | $871    |
+| gpt-5.2              | $23.29 | $699    |
+| claude-haiku-4.5     | $9.68  | $290    |
+| gemini-2.0-flash-exp | $5.45  | $164    |
+| gpt-5-mini           | $0.25  | $100    |
+```
 
 **Cost Calculator:**
 ```ruby

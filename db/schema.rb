@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2025_12_29_130949) do
+ActiveRecord::Schema[8.1].define(version: 2025_12_31_150019) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -139,6 +139,7 @@ ActiveRecord::Schema[8.1].define(version: 2025_12_29_130949) do
   end
 
   create_table "trading_decisions", force: :cascade do |t|
+    t.decimal "atr_value", precision: 20, scale: 8
     t.decimal "confidence", precision: 3, scale: 2
     t.jsonb "context_sent", default: {}
     t.datetime "created_at", null: false
@@ -147,17 +148,20 @@ ActiveRecord::Schema[8.1].define(version: 2025_12_29_130949) do
     t.string "llm_model"
     t.jsonb "llm_response", default: {}
     t.bigint "macro_strategy_id"
+    t.integer "next_cycle_interval", default: 12
     t.string "operation"
     t.jsonb "parsed_decision", default: {}
     t.string "rejection_reason"
     t.string "status", default: "pending"
     t.string "symbol", null: false
     t.datetime "updated_at", null: false
+    t.integer "volatility_level", default: 2
     t.index ["created_at"], name: "index_trading_decisions_on_created_at"
     t.index ["macro_strategy_id"], name: "index_trading_decisions_on_macro_strategy_id"
     t.index ["status"], name: "index_trading_decisions_on_status"
     t.index ["symbol", "created_at"], name: "index_trading_decisions_on_symbol_and_created_at"
     t.index ["symbol"], name: "index_trading_decisions_on_symbol"
+    t.index ["volatility_level"], name: "index_trading_decisions_on_volatility_level"
   end
 
   add_foreign_key "orders", "positions"
