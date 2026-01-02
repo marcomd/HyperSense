@@ -10,9 +10,25 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2025_12_31_150019) do
+ActiveRecord::Schema[8.1].define(version: 2026_01_02_165238) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
+
+  create_table "account_balances", force: :cascade do |t|
+    t.decimal "balance", precision: 20, scale: 8, null: false
+    t.datetime "created_at", null: false
+    t.decimal "delta", precision: 20, scale: 8
+    t.string "event_type", null: false
+    t.jsonb "hyperliquid_data", default: {}
+    t.text "notes"
+    t.decimal "previous_balance", precision: 20, scale: 8
+    t.datetime "recorded_at", null: false
+    t.string "source", default: "hyperliquid"
+    t.datetime "updated_at", null: false
+    t.index ["event_type", "recorded_at"], name: "index_account_balances_on_event_type_and_recorded_at"
+    t.index ["event_type"], name: "index_account_balances_on_event_type"
+    t.index ["recorded_at"], name: "index_account_balances_on_recorded_at"
+  end
 
   create_table "execution_logs", force: :cascade do |t|
     t.string "action", null: false

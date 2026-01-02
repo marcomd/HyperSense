@@ -1,6 +1,6 @@
 # HyperSense
 
-**Version 0.29.0** | Autonomous AI Trading Agent for cryptocurrency markets.
+**Version 0.30.0** | Autonomous AI Trading Agent for cryptocurrency markets.
 
 ![HyperSense_cover1.jpg](docs/HyperSense_cover1.jpg)
 
@@ -173,7 +173,8 @@ HyperSense/
 │   │   │   ├── position.rb          # Open/closed positions
 │   │   │   ├── order.rb             # Exchange orders
 │   │   │   ├── execution_log.rb     # Audit trail
-│   │   │   └── forecast.rb          # Price predictions with MAE/MAPE
+│   │   │   ├── forecast.rb          # Price predictions with MAE/MAPE
+│   │   │   └── account_balance.rb   # Balance history for PnL tracking
 │   │   └── services/
 │   │       ├── data_ingestion/
 │   │       │   ├── price_fetcher.rb      # Binance API
@@ -193,10 +194,11 @@ HyperSense/
 │   │       │   ├── high_level_agent.rb   # Macro strategy (daily)
 │   │       │   └── low_level_agent.rb    # Trade decisions (5 min)
 │   │       ├── execution/
-│   │       │   ├── hyperliquid_client.rb # Exchange API wrapper
-│   │       │   ├── account_manager.rb    # Account state
-│   │       │   ├── position_manager.rb   # Position tracking
-│   │       │   └── order_executor.rb     # Order execution
+│   │       │   ├── hyperliquid_client.rb   # Exchange API wrapper
+│   │       │   ├── account_manager.rb     # Account state
+│   │       │   ├── position_manager.rb    # Position tracking
+│   │       │   ├── order_executor.rb      # Order execution
+│   │       │   └── balance_sync_service.rb # Balance tracking & deposit/withdrawal detection
 │   │       ├── risk/
 │   │       │   ├── risk_manager.rb       # Centralized risk validation
 │   │       │   ├── position_sizer.rb     # Risk-based position sizing
@@ -924,6 +926,60 @@ costs = llm_calc.estimated_costs(since: 24.hours.ago)
 #   estimated_output_tokens: 15000
 # }
 ```
+
+### 9. Balance Tracking
+
+Track account balance history for accurate PnL calculation that accounts for deposits and withdrawals.
+
+**Problem Solved:** Without balance tracking, all-time PnL is calculated only from local Position records. If the user made trades outside HyperSense or deposited/withdrew funds, the PnL would be inaccurate.
+
+**Solution:** The `BalanceSyncService` tracks balance history and detects deposits/withdrawals by comparing balance changes with expected PnL from closed positions.
+
+**AccountBalance Model:**
+```ruby
+# Get balance history
+AccountBalance.latest           # => Most recent balance record
+AccountBalance.initial          # => First (initial) balance record
+AccountBalance.total_deposits   # => Sum of all deposit amounts
+AccountBalance.total_withdrawals # => Sum of all withdrawal amounts
+
+# Event types: initial, sync, deposit, withdrawal, adjustment
+balance = AccountBalance.latest
+balance.event_type    # => "deposit"
+balance.balance       # => 15000.0
+balance.delta         # => 5000.0 (change from previous)
+```
+
+**BalanceSyncService:**
+```ruby
+service = Execution::BalanceSyncService.new
+
+# Sync balance from Hyperliquid (called automatically during TradingCycle)
+result = service.sync!
+# => { created: true, balance: 15000.0, event_type: "deposit" }
+
+# Calculate accurate PnL (accounts for deposits/withdrawals)
+service.calculated_pnl
+# => 1000.0 (current - initial - deposits + withdrawals)
+
+# Get balance history summary
+service.balance_history
+# => {
+#   initial_balance: 10000.0,
+#   current_balance: 16000.0,
+#   total_deposits: 5000.0,
+#   total_withdrawals: 0.0,
+#   calculated_pnl: 1000.0,
+#   last_sync: Time
+# }
+```
+
+**PnL Formula:**
+```
+calculated_pnl = current_balance - initial_balance - total_deposits + total_withdrawals
+```
+
+**Detection Threshold:** Changes below $1 are treated as normal trading activity. Larger unexplained changes are classified as deposits (if positive) or withdrawals (if negative).
 
 ---
 

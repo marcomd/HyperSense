@@ -45,12 +45,13 @@ module Api
       #
       # Aggregates open positions, realized PnL, circuit breaker details, volatility info,
       # and Hyperliquid account data from the most recent trading decision.
+      # Also includes calculated PnL that accounts for deposits/withdrawals.
       #
       # Note: trading_allowed is not included here - it comes from /health endpoint (DRY principle).
       #
       # @return [Hash] Account summary with keys :open_positions_count, :total_unrealized_pnl,
       #   :total_margin_used, :realized_pnl_today, :paper_trading, :circuit_breaker, :volatility_info,
-      #   :total_realized_pnl, :all_time_pnl, :hyperliquid, :testnet_mode
+      #   :total_realized_pnl, :all_time_pnl, :calculated_pnl, :balance_history, :hyperliquid, :testnet_mode
       def account_summary
         open_positions = Position.open
 
@@ -60,10 +61,14 @@ module Api
                                  .where("closed_at >= ?", today_start)
                                  .sum(:realized_pnl)
 
-        # Calculate all-time PnL from positions
+        # Calculate all-time PnL from positions (legacy calculation)
         total_realized_pnl = Position.closed.sum(:realized_pnl).to_f
         total_unrealized_pnl = open_positions.sum(:unrealized_pnl).to_f
         all_time_pnl = total_realized_pnl + total_unrealized_pnl
+
+        # Get calculated PnL that accounts for deposits/withdrawals
+        balance_service = Execution::BalanceSyncService.new
+        balance_history_data = balance_service.balance_history
 
         # Get circuit breaker status
         circuit_breaker = Risk::CircuitBreaker.new if defined?(Risk::CircuitBreaker)
@@ -82,6 +87,13 @@ module Api
           realized_pnl_today: realized_today.to_f.round(2),
           total_realized_pnl: total_realized_pnl.round(2),
           all_time_pnl: all_time_pnl.round(2),
+          calculated_pnl: balance_history_data[:calculated_pnl]&.round(2),
+          balance_history: {
+            initial_balance: balance_history_data[:initial_balance]&.round(2),
+            total_deposits: balance_history_data[:total_deposits]&.round(2),
+            total_withdrawals: balance_history_data[:total_withdrawals]&.round(2),
+            last_sync: balance_history_data[:last_sync]&.iso8601
+          },
           paper_trading: Settings.trading.paper_trading,
           circuit_breaker: {
             # Note: trading_allowed comes from /health endpoint (single source of truth)

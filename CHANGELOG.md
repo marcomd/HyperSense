@@ -2,6 +2,33 @@
 
 All notable changes to HyperSense.
 
+## [0.30.0] - 2026-01-02
+
+### Added
+- **Balance Tracking System** - Track account balance history for accurate PnL calculation
+  - `AccountBalance` model - Stores balance snapshots with event classification
+  - `Execution::BalanceSyncService` - Syncs balance from Hyperliquid, detects deposits/withdrawals
+  - Automatic balance sync during each TradingCycle
+- **Deposit/Withdrawal Detection** - Distinguishes external funds from trading gains/losses
+  - Compares balance changes with expected PnL from closed positions
+  - Classifies events as: initial, sync, deposit, withdrawal, adjustment
+- **Calculated PnL** - Accurate all-time PnL that accounts for deposits/withdrawals
+  - Formula: `current_balance - initial_balance - deposits + withdrawals`
+  - Dashboard now shows `calculated_pnl` alongside legacy `all_time_pnl`
+- **Balance History in Dashboard** - New `balance_history` object in account summary
+  - `initial_balance` - Starting capital (first recorded balance)
+  - `total_deposits` - Sum of all detected deposits
+  - `total_withdrawals` - Sum of all detected withdrawals
+  - `last_sync` - Timestamp of last balance sync
+
+### Technical Details
+- Migration: `CreateAccountBalances` with JSONB for raw Hyperliquid data
+- `AccountBalance` model with scopes: deposits, withdrawals, syncs, initial_records
+- `BalanceSyncService#sync!` - Main sync method, returns event type and balance
+- `BalanceSyncService#calculated_pnl` - Returns accurate PnL excluding deposits/withdrawals
+- `TradingCycle#sync_balance` - Integrated at start of position sync
+- `DashboardController#account_summary` - Now includes calculated_pnl and balance_history
+
 ## [0.29.0] - 2026-01-02
 
 ### Added
