@@ -2,6 +2,27 @@
 
 All notable changes to HyperSense.
 
+## [0.29.0] - 2026-01-02
+
+### Added
+- **Hyperliquid Account Data in Dashboard** - Exchange balance and account info now shown in Account Summary
+  - `hyperliquid.balance` - Current account value from exchange API
+  - `hyperliquid.available_margin` - Available margin for trading
+  - `hyperliquid.margin_used` - Margin currently in use
+  - `hyperliquid.positions_count` - Number of positions on exchange
+  - `hyperliquid.configured` - Whether Hyperliquid credentials are set
+- **All-Time PnL Tracking** - Dashboard now shows total realized + unrealized PnL from all positions
+  - `total_realized_pnl` - Sum of realized PnL from all closed positions
+  - `all_time_pnl` - Combined realized + unrealized PnL
+- **Testnet Mode Indicator** - `testnet_mode` field shows when using Hyperliquid testnet
+- **Enhanced Position Sync Logging** - Debug logs now show account state during position sync
+
+### Technical Details
+- `DashboardController#fetch_hyperliquid_account_data` - Fetches account state from Hyperliquid
+- `PositionManager#sync_from_hyperliquid` - Now logs testnet status and account value
+
+### Supports Frontend (0.13.0)
+
 ## [0.28.0] - 2026-01-02
 
 ### Added

@@ -35,8 +35,39 @@ RSpec.describe "Api::V1::Dashboard", type: :request do
 
       expect(account["open_positions_count"]).to eq(1)
       expect(account).to have_key("total_unrealized_pnl")
+      expect(account).to have_key("total_realized_pnl")
+      expect(account).to have_key("all_time_pnl")
       expect(account).to have_key("paper_trading")
       expect(account).to have_key("circuit_breaker")
+      expect(account).to have_key("hyperliquid")
+      expect(account).to have_key("testnet_mode")
+    end
+
+    it "calculates all-time PnL from positions" do
+      # Create closed positions with realized PnL
+      create(:position, :closed, symbol: "ETH", realized_pnl: 100.0)
+      create(:position, :closed, symbol: "SOL", realized_pnl: -25.0)
+
+      get "/api/v1/dashboard"
+
+      json = response.parsed_body
+      account = json["account"]
+
+      # total_realized_pnl = 100 - 25 = 75
+      expect(account["total_realized_pnl"]).to eq(75.0)
+      # all_time_pnl = total_realized_pnl + total_unrealized_pnl (from open position)
+      expect(account["all_time_pnl"]).to be_present
+    end
+
+    it "includes hyperliquid data when not configured" do
+      # By default in tests, Hyperliquid is not configured
+      get "/api/v1/dashboard"
+
+      json = response.parsed_body
+      account = json["account"]
+
+      expect(account["hyperliquid"]["configured"]).to eq(false)
+      expect(account["hyperliquid"]["balance"]).to be_nil
     end
 
     it "includes market overview" do

@@ -19,10 +19,20 @@ module Execution
     # Creates new positions, updates existing, closes orphaned
     # @return [Hash] Sync results
     def sync_from_hyperliquid
-      @logger.info "[PositionManager] Syncing positions from Hyperliquid..."
+      @logger.info "[PositionManager] Syncing positions from Hyperliquid " \
+                   "(testnet: #{@client.testnet?}, address: #{@client.address})..."
 
       response = @client.user_state(@client.address)
+
+      # Log account state for debugging
+      summary = response["crossMarginSummary"] || {}
+      @logger.info "[PositionManager] Account state - " \
+                   "Value: #{summary['accountValue']}, " \
+                   "Margin used: #{summary['totalMarginUsed']}, " \
+                   "Available: #{summary['totalRawUsd']}"
+
       hl_positions = response["assetPositions"] || []
+      @logger.info "[PositionManager] Found #{hl_positions.count} positions on exchange"
 
       synced_symbols = []
       results = { created: 0, updated: 0, closed: 0 }

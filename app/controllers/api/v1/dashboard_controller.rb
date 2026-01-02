@@ -43,13 +43,14 @@ module Api
 
       # Build account summary data for dashboard display
       #
-      # Aggregates open positions, realized PnL, circuit breaker details, and volatility info
-      # from the most recent trading decision.
+      # Aggregates open positions, realized PnL, circuit breaker details, volatility info,
+      # and Hyperliquid account data from the most recent trading decision.
       #
       # Note: trading_allowed is not included here - it comes from /health endpoint (DRY principle).
       #
       # @return [Hash] Account summary with keys :open_positions_count, :total_unrealized_pnl,
-      #   :total_margin_used, :realized_pnl_today, :paper_trading, :circuit_breaker, :volatility_info
+      #   :total_margin_used, :realized_pnl_today, :paper_trading, :circuit_breaker, :volatility_info,
+      #   :total_realized_pnl, :all_time_pnl, :hyperliquid, :testnet_mode
       def account_summary
         open_positions = Position.open
 
@@ -59,6 +60,11 @@ module Api
                                  .where("closed_at >= ?", today_start)
                                  .sum(:realized_pnl)
 
+        # Calculate all-time PnL from positions
+        total_realized_pnl = Position.closed.sum(:realized_pnl).to_f
+        total_unrealized_pnl = open_positions.sum(:unrealized_pnl).to_f
+        all_time_pnl = total_realized_pnl + total_unrealized_pnl
+
         # Get circuit breaker status
         circuit_breaker = Risk::CircuitBreaker.new if defined?(Risk::CircuitBreaker)
         breaker_status = circuit_breaker&.status || { trading_allowed: true }
@@ -66,18 +72,25 @@ module Api
         # Get volatility info from latest trading decision
         latest_decision = TradingDecision.recent.first
 
+        # Fetch Hyperliquid account data
+        hyperliquid_data = fetch_hyperliquid_account_data
+
         {
           open_positions_count: open_positions.count,
-          total_unrealized_pnl: open_positions.sum(:unrealized_pnl).to_f.round(2),
+          total_unrealized_pnl: total_unrealized_pnl.round(2),
           total_margin_used: open_positions.sum(:margin_used).to_f.round(2),
           realized_pnl_today: realized_today.to_f.round(2),
+          total_realized_pnl: total_realized_pnl.round(2),
+          all_time_pnl: all_time_pnl.round(2),
           paper_trading: Settings.trading.paper_trading,
           circuit_breaker: {
             # Note: trading_allowed comes from /health endpoint (single source of truth)
             daily_loss: breaker_status[:daily_loss]&.round(2),
             consecutive_losses: breaker_status[:consecutive_losses]
           },
-          volatility_info: build_volatility_info(latest_decision)
+          volatility_info: build_volatility_info(latest_decision),
+          hyperliquid: hyperliquid_data,
+          testnet_mode: Settings.hyperliquid.testnet
         }
       end
 
@@ -279,6 +292,45 @@ module Api
       # @return [Hash] Intervals in minutes keyed by volatility level
       def volatility_intervals
         Settings.volatility.intervals.to_h
+      end
+
+      # Fetch account data directly from Hyperliquid exchange
+      #
+      # Returns balance, margin, and position info if Hyperliquid is configured.
+      # Falls back to default values if not configured or on error.
+      #
+      # @return [Hash] Hyperliquid account data with keys :balance, :available_margin,
+      #   :margin_used, :positions_count, :configured
+      def fetch_hyperliquid_account_data
+        client = Execution::HyperliquidClient.new
+        return default_hyperliquid_data unless client.configured?
+
+        account_manager = Execution::AccountManager.new(client: client)
+        account_state = account_manager.fetch_account_state
+
+        {
+          balance: account_state[:account_value]&.round(2),
+          available_margin: account_state[:available_margin]&.round(2),
+          margin_used: account_state[:margin_used]&.round(2),
+          positions_count: account_state[:positions_count],
+          configured: true
+        }
+      rescue StandardError => e
+        Rails.logger.warn "[Dashboard] Failed to fetch Hyperliquid data: #{e.class} - #{e.message}"
+        default_hyperliquid_data
+      end
+
+      # Default Hyperliquid data when not configured or on error
+      #
+      # @return [Hash] Default data with nil values
+      def default_hyperliquid_data
+        {
+          balance: nil,
+          available_margin: nil,
+          margin_used: nil,
+          positions_count: nil,
+          configured: false
+        }
       end
     end
   end
