@@ -2,6 +2,15 @@
 
 All notable changes to HyperSense.
 
+## [0.33.3] - 2026-01-02
+
+### Fixed
+
+- **Per-Symbol ATR Values** - Each trading decision now stores its own symbol-specific ATR percentage
+  - Previously all decisions in a cycle got the same ATR from the most volatile asset
+  - Now BTC decisions show BTC's ATR (e.g., 0.6%), ETH shows ETH's ATR (e.g., 0.75%), etc.
+  - Job scheduling still uses highest volatility (smallest interval) across all assets
+
 ## [0.33.2] - 2026-01-02
 
 ### Fixed

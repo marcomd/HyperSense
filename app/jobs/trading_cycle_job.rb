@@ -54,11 +54,20 @@ class TradingCycleJob < ApplicationJob
 
   private
 
-  # Calculate current market volatility
+  # Calculate current market volatility for all assets
   #
-  # @return [Indicators::VolatilityClassifier::Result]
+  # Stores per-symbol volatility in @symbol_volatilities for use in
+  # update_decisions_with_volatility, and returns the highest volatility
+  # (smallest interval) for job scheduling.
+  #
+  # @return [Indicators::VolatilityClassifier::Result] Highest volatility among all assets
   def calculate_volatility
-    Indicators::VolatilityClassifier.classify_all_assets
+    @symbol_volatilities = Settings.assets.to_a.each_with_object({}) do |symbol, hash|
+      hash[symbol] = Indicators::VolatilityClassifier.classify_for_symbol(symbol)
+    end
+
+    # Return highest volatility (smallest interval) for job scheduling
+    @symbol_volatilities.values.min_by(&:interval) || default_volatility_result
   rescue StandardError => e
     Rails.logger.error "[TradingCycle] Volatility calculation failed: #{e.message}"
     default_volatility_result
@@ -78,14 +87,20 @@ class TradingCycleJob < ApplicationJob
 
   # Update trading decisions with volatility information
   #
+  # Each decision gets its symbol-specific ATR percentage from @symbol_volatilities,
+  # while the next_cycle_interval uses the aggregated (highest) volatility.
+  #
   # @param decisions [Array<TradingDecision>]
-  # @param volatility [Indicators::VolatilityClassifier::Result]
-  def update_decisions_with_volatility(decisions, volatility)
+  # @param aggregated_volatility [Indicators::VolatilityClassifier::Result]
+  def update_decisions_with_volatility(decisions, aggregated_volatility)
     decisions.each do |decision|
+      # Use symbol-specific volatility for ATR, fallback to aggregated
+      symbol_volatility = @symbol_volatilities&.dig(decision.symbol) || aggregated_volatility
+
       decision.update!(
-        volatility_level: volatility.level,
-        atr_value: volatility.atr_percentage,
-        next_cycle_interval: volatility.interval
+        volatility_level: symbol_volatility.level,
+        atr_value: symbol_volatility.atr_percentage,
+        next_cycle_interval: aggregated_volatility.interval
       )
     end
   rescue StandardError => e

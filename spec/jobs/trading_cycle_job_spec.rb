@@ -4,21 +4,33 @@ require "rails_helper"
 
 RSpec.describe TradingCycleJob, type: :job do
   let(:trading_cycle) { instance_double(TradingCycle) }
-  let(:decision_hold) { create(:trading_decision, operation: "hold") }
-  let(:decision_open) { create(:trading_decision, operation: "open") }
-  let(:volatility_result) do
+  let(:decision_hold) { create(:trading_decision, symbol: "BTC", operation: "hold") }
+  let(:decision_open) { create(:trading_decision, symbol: "ETH", operation: "open") }
+  let(:btc_volatility) do
     Indicators::VolatilityClassifier::Result.new(
       level: :medium,
       interval: 12,
-      atr_value: 1.5,
-      atr_percentage: 0.015
+      atr_value: 586.82,
+      atr_percentage: 0.006
+    )
+  end
+  let(:eth_volatility) do
+    Indicators::VolatilityClassifier::Result.new(
+      level: :high,
+      interval: 6,
+      atr_value: 25.67,
+      atr_percentage: 0.0075
     )
   end
 
   before do
     allow(TradingCycle).to receive(:new).and_return(trading_cycle)
     allow(DashboardChannel).to receive(:broadcast_decision)
-    allow(Indicators::VolatilityClassifier).to receive(:classify_all_assets).and_return(volatility_result)
+    # Mock per-symbol volatility classification
+    allow(Indicators::VolatilityClassifier).to receive(:classify_for_symbol).with("BTC").and_return(btc_volatility)
+    allow(Indicators::VolatilityClassifier).to receive(:classify_for_symbol).with("ETH").and_return(eth_volatility)
+    allow(Indicators::VolatilityClassifier).to receive(:classify_for_symbol).with("SOL").and_return(btc_volatility)
+    allow(Indicators::VolatilityClassifier).to receive(:classify_for_symbol).with("BNB").and_return(btc_volatility)
   end
 
   describe "#perform" do
@@ -104,36 +116,51 @@ RSpec.describe TradingCycleJob, type: :job do
       allow(trading_cycle).to receive(:execute).and_return(decisions)
     end
 
-    it "schedules next job with volatility-based interval" do
-      expect(described_class).to receive(:set).with(wait: 12.minutes).and_call_original
+    it "schedules next job with highest volatility interval" do
+      # ETH has highest volatility (interval: 6), so it determines schedule
+      expect(described_class).to receive(:set).with(wait: 6.minutes).and_call_original
 
       described_class.new.perform
     end
 
     it "schedules ForecastJob 1 minute before next cycle" do
-      expect(ForecastJob).to receive(:set).with(wait: 11.minutes).and_call_original
+      # ETH has highest volatility (interval: 6), so ForecastJob runs at 5 minutes
+      expect(ForecastJob).to receive(:set).with(wait: 5.minutes).and_call_original
 
       described_class.new.perform
     end
 
-    it "updates decisions with volatility data" do
-      described_class.new.perform
+    context "with multiple symbols" do
+      let(:decisions) { [ decision_hold, decision_open ] }
 
-      decision_hold.reload
-      expect(decision_hold.volatility_level).to eq("medium")
-      expect(decision_hold.atr_value).to eq(0.015)
-      expect(decision_hold.next_cycle_interval).to eq(12)
+      it "updates each decision with its symbol-specific ATR percentage" do
+        described_class.new.perform
+
+        # BTC decision gets BTC-specific volatility
+        decision_hold.reload
+        expect(decision_hold.volatility_level).to eq("medium")
+        expect(decision_hold.atr_value).to eq(0.006)
+        # But interval uses aggregated (highest) volatility
+        expect(decision_hold.next_cycle_interval).to eq(6)
+
+        # ETH decision gets ETH-specific volatility
+        decision_open.reload
+        expect(decision_open.volatility_level).to eq("high")
+        expect(decision_open.atr_value).to eq(0.0075)
+        expect(decision_open.next_cycle_interval).to eq(6)
+      end
     end
 
     it "always schedules next job even on error (ensure block)" do
       allow(trading_cycle).to receive(:execute).and_raise(StandardError, "Cycle error")
-      expect(described_class).to receive(:set).with(wait: 12.minutes).and_call_original
+      # Still uses ETH's interval (6) because volatility calc succeeds in ensure block
+      expect(described_class).to receive(:set).with(wait: 6.minutes).and_call_original
 
       expect { described_class.new.perform }.to raise_error(StandardError, "Cycle error")
     end
 
     context "with very high volatility" do
-      let(:high_volatility_result) do
+      let(:very_high_volatility) do
         Indicators::VolatilityClassifier::Result.new(
           level: :very_high,
           interval: 3,
@@ -143,8 +170,9 @@ RSpec.describe TradingCycleJob, type: :job do
       end
 
       before do
-        allow(Indicators::VolatilityClassifier).to receive(:classify_all_assets)
-          .and_return(high_volatility_result)
+        # Override BTC to have very high volatility
+        allow(Indicators::VolatilityClassifier).to receive(:classify_for_symbol).with("BTC")
+          .and_return(very_high_volatility)
       end
 
       it "uses shorter interval for high volatility" do
@@ -162,7 +190,7 @@ RSpec.describe TradingCycleJob, type: :job do
     end
 
     context "with low volatility" do
-      let(:low_volatility_result) do
+      let(:low_volatility) do
         Indicators::VolatilityClassifier::Result.new(
           level: :low,
           interval: 25,
@@ -172,8 +200,9 @@ RSpec.describe TradingCycleJob, type: :job do
       end
 
       before do
-        allow(Indicators::VolatilityClassifier).to receive(:classify_all_assets)
-          .and_return(low_volatility_result)
+        # Override all assets to have low volatility
+        allow(Indicators::VolatilityClassifier).to receive(:classify_for_symbol)
+          .and_return(low_volatility)
       end
 
       it "uses longer interval for low volatility" do
@@ -185,7 +214,7 @@ RSpec.describe TradingCycleJob, type: :job do
 
     context "when volatility classification fails" do
       before do
-        allow(Indicators::VolatilityClassifier).to receive(:classify_all_assets)
+        allow(Indicators::VolatilityClassifier).to receive(:classify_for_symbol)
           .and_raise(StandardError, "API error")
       end
 
