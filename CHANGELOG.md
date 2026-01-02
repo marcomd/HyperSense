@@ -2,6 +2,26 @@
 
 All notable changes to HyperSense.
 
+## [0.31.0] - 2026-01-02
+
+### Added
+- **Orders API** - REST endpoints for order history and statistics
+  - `GET /api/v1/orders` - List orders with filters (status, symbol, side, order_type, date range)
+  - `GET /api/v1/orders/:id` - Single order with full details including linked decision/position
+  - `GET /api/v1/orders/active` - Pending and submitted orders
+  - `GET /api/v1/orders/stats` - Order statistics (counts by status/side/type, fill rate, slippage)
+- **Account Balances API** - REST endpoints for balance history and PnL summary
+  - `GET /api/v1/account_balances` - List balance records with filters (event_type, date range)
+  - `GET /api/v1/account_balances/:id` - Single balance record with Hyperliquid data
+  - `GET /api/v1/account_balances/summary` - Current balance summary with calculated PnL
+
+### Technical Details
+- `Api::V1::OrdersController` - Orders API with filtering, pagination, and statistics
+- `Api::V1::AccountBalancesController` - Balance history API with summary endpoint
+- Full test coverage for both controllers (38 new tests)
+
+### Supports Frontend (0.14.0)
+
 ## [0.30.0] - 2026-01-02
 
 ### Added

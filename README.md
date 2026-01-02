@@ -1,6 +1,6 @@
 # HyperSense
 
-**Version 0.30.0** | Autonomous AI Trading Agent for cryptocurrency markets.
+**Version 0.31.0** | Autonomous AI Trading Agent for cryptocurrency markets.
 
 ![HyperSense_cover1.jpg](docs/HyperSense_cover1.jpg)
 
@@ -1093,6 +1093,13 @@ calculated_pnl = current_balance - initial_balance - total_deposits + total_with
 | `/api/v1/costs/summary` | GET | Cost breakdown for period (trading fees, LLM, server) |
 | `/api/v1/costs/llm` | GET | Detailed LLM cost breakdown |
 | `/api/v1/costs/trading` | GET | Detailed trading fee breakdown |
+| `/api/v1/orders` | GET | Orders (paginated with filters) |
+| `/api/v1/orders/:id` | GET | Single order with full details |
+| `/api/v1/orders/active` | GET | Pending and submitted orders |
+| `/api/v1/orders/stats` | GET | Order statistics (counts, fill rate, slippage) |
+| `/api/v1/account_balances` | GET | Balance history (paginated with filters) |
+| `/api/v1/account_balances/:id` | GET | Single balance record details |
+| `/api/v1/account_balances/summary` | GET | Balance summary with calculated PnL |
 
 **WebSocket Channels:**
 
