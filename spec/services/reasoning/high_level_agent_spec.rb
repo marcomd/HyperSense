@@ -161,7 +161,7 @@ RSpec.describe Reasoning::HighLevelAgent do
     context "with API connection error" do
       before do
         allow_any_instance_of(LLM::Client).to receive(:chat).and_raise(
-          LLM::APIError.new("Connection failed")
+          LLM::Errors::APIError.new("Connection failed")
         )
       end
 
@@ -178,13 +178,13 @@ RSpec.describe Reasoning::HighLevelAgent do
     context "with empty LLM response" do
       before do
         allow_any_instance_of(LLM::Client).to receive(:chat).and_raise(
-          LLM::InvalidResponseError.new("Empty response from LLM")
+          LLM::Errors::InvalidResponseError.new("Empty response from LLM")
         )
       end
 
       it "raises an error for empty response" do
         # Empty responses should trigger the standard error handling and raise
-        expect { agent.analyze }.to raise_error(LLM::InvalidResponseError, /Empty response/)
+        expect { agent.analyze }.to raise_error(LLM::Errors::InvalidResponseError, /Empty response/)
       end
     end
   end

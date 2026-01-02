@@ -2,6 +2,20 @@
 
 All notable changes to HyperSense.
 
+## [0.33.5] - 2026-01-03
+
+### Fixed
+- **Zeitwerk Autoloading** - Fixed `LLM::Errors` constant not found error in CI/production
+  - Restructured `LLM::Error` → `LLM::Errors::Base` to match Zeitwerk naming conventions
+  - Error classes now under `LLM::Errors::` namespace (RateLimitError, APIError, ConfigurationError, InvalidResponseError)
+  - Removed `require_relative` from client.rb (Zeitwerk handles autoloading)
+
+### Changed
+- **GitHub Actions CI** - Added RSpec test job to CI workflow
+  - Tests now run on every PR and push to master
+  - Uses PostgreSQL 16 service container
+  - Changed `db:create db:migrate` to `db:prepare` for multi-database support
+
 ## [0.33.4] - 2026-01-02
 
 ### Fixed

@@ -82,10 +82,10 @@ module Reasoning
       else
         handle_invalid_response(parsed[:errors], context, response)
       end
-    rescue LLM::RateLimitError => e
+    rescue LLM::Errors::RateLimitError => e
       @logger.warn "[HighLevelAgent] Rate limited: #{e.message}"
       nil
-    rescue LLM::APIError, LLM::ConfigurationError, Faraday::Error => e
+    rescue LLM::Errors::APIError, LLM::Errors::ConfigurationError, Faraday::Error => e
       @logger.error "[HighLevelAgent] API error: #{e.message}"
       nil
     rescue StandardError => e

@@ -147,10 +147,10 @@ module Reasoning
       parsed = DecisionParser.parse_trading_decision(response)
 
       create_decision(symbol, parsed, context, response, macro_strategy)
-    rescue LLM::RateLimitError => e
+    rescue LLM::Errors::RateLimitError => e
       @logger.warn "[LowLevelAgent] Rate limited for #{symbol}: #{e.message}"
       create_error_decision(symbol, "Rate limited - holding", macro_strategy)
-    rescue LLM::APIError, LLM::ConfigurationError, Faraday::Error => e
+    rescue LLM::Errors::APIError, LLM::Errors::ConfigurationError, Faraday::Error => e
       @logger.error "[LowLevelAgent] API error for #{symbol}: #{e.message}"
       create_error_decision(symbol, e.message, macro_strategy)
     rescue StandardError => e

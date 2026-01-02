@@ -42,7 +42,7 @@ RSpec.describe LLM::Client do
 
       it "raises ConfigurationError" do
         expect { described_class.new }.to raise_error(
-          LLM::ConfigurationError,
+          LLM::Errors::ConfigurationError,
           /Unsupported LLM provider: 'unsupported_provider'/
         )
       end
@@ -56,7 +56,7 @@ RSpec.describe LLM::Client do
 
       it "raises ConfigurationError" do
         expect { described_class.new }.to raise_error(
-          LLM::ConfigurationError,
+          LLM::Errors::ConfigurationError,
           /ANTHROPIC_API_KEY is required/
         )
       end
@@ -70,7 +70,7 @@ RSpec.describe LLM::Client do
 
       it "raises ConfigurationError" do
         expect { described_class.new }.to raise_error(
-          LLM::ConfigurationError,
+          LLM::Errors::ConfigurationError,
           /GEMINI_API_KEY is required/
         )
       end
@@ -116,7 +116,7 @@ RSpec.describe LLM::Client do
 
       it "raises ConfigurationError" do
         expect { described_class.new }.to raise_error(
-          LLM::ConfigurationError,
+          LLM::Errors::ConfigurationError,
           /OPENAI_API_KEY is required/
         )
       end
@@ -244,15 +244,15 @@ RSpec.describe LLM::Client do
         allow(RubyLLM).to receive(:chat).and_raise(rate_limit_error)
       end
 
-      it "wraps in LLM::RateLimitError" do
+      it "wraps in LLM::Errors::RateLimitError" do
         expect { client.chat(system_prompt: system_prompt, user_prompt: user_prompt) }
-          .to raise_error(LLM::RateLimitError, "Too many requests")
+          .to raise_error(LLM::Errors::RateLimitError, "Too many requests")
       end
 
       it "includes original error" do
         begin
           client.chat(system_prompt: system_prompt, user_prompt: user_prompt)
-        rescue LLM::RateLimitError => e
+        rescue LLM::Errors::RateLimitError => e
           expect(e.original_error).to be_a(RubyLLM::RateLimitError)
         end
       end
@@ -272,9 +272,9 @@ RSpec.describe LLM::Client do
         allow(RubyLLM).to receive(:chat).and_raise(auth_error)
       end
 
-      it "wraps in LLM::ConfigurationError" do
+      it "wraps in LLM::Errors::ConfigurationError" do
         expect { client.chat(system_prompt: system_prompt, user_prompt: user_prompt) }
-          .to raise_error(LLM::ConfigurationError, /Authentication failed/)
+          .to raise_error(LLM::Errors::ConfigurationError, /Authentication failed/)
       end
     end
 
@@ -292,9 +292,9 @@ RSpec.describe LLM::Client do
         allow(RubyLLM).to receive(:chat).and_raise(server_error)
       end
 
-      it "wraps in LLM::APIError" do
+      it "wraps in LLM::Errors::APIError" do
         expect { client.chat(system_prompt: system_prompt, user_prompt: user_prompt) }
-          .to raise_error(LLM::APIError, "Internal server error")
+          .to raise_error(LLM::Errors::APIError, "Internal server error")
       end
     end
 
@@ -314,7 +314,7 @@ RSpec.describe LLM::Client do
 
       it "raises InvalidResponseError" do
         expect { client.chat(system_prompt: system_prompt, user_prompt: user_prompt) }
-          .to raise_error(LLM::InvalidResponseError, /Empty response/)
+          .to raise_error(LLM::Errors::InvalidResponseError, /Empty response/)
       end
     end
 
@@ -334,7 +334,7 @@ RSpec.describe LLM::Client do
 
       it "raises InvalidResponseError" do
         expect { client.chat(system_prompt: system_prompt, user_prompt: user_prompt) }
-          .to raise_error(LLM::InvalidResponseError, /Empty response/)
+          .to raise_error(LLM::Errors::InvalidResponseError, /Empty response/)
       end
     end
   end

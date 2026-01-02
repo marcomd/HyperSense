@@ -174,7 +174,7 @@ RSpec.describe Reasoning::LowLevelAgent do
     context "with API error" do
       before do
         allow_any_instance_of(LLM::Client).to receive(:chat).and_raise(
-          LLM::APIError.new("Connection failed")
+          LLM::Errors::APIError.new("Connection failed")
         )
       end
 
