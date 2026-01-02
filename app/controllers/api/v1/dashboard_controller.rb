@@ -278,8 +278,11 @@ module Api
 
       # Build volatility information from the latest trading decision
       #
-      # Returns volatility level, ATR value, next cycle interval, the scheduled
-      # time for the next trading cycle, and the configured intervals for each level.
+      # Returns volatility level (aggregated from interval), ATR value, next cycle interval,
+      # the scheduled time for the next trading cycle, and the configured intervals for each level.
+      #
+      # Note: volatility_level is derived from next_cycle_interval (aggregated across all assets)
+      # rather than the decision's symbol-specific volatility_level.
       #
       # @param decision [TradingDecision, nil] The latest trading decision
       # @return [Hash, nil] Volatility data or nil if no decision exists
@@ -291,13 +294,31 @@ module Api
         end
 
         {
-          volatility_level: decision.volatility_level,
+          volatility_level: level_from_interval(decision.next_cycle_interval),
           atr_value: decision.atr_value&.to_f&.round(8),
           next_cycle_interval: decision.next_cycle_interval,
           next_cycle_at: next_cycle_at&.iso8601,
           last_decision_at: decision.created_at.iso8601,
           intervals: volatility_intervals
         }
+      end
+
+      # Derive volatility level from interval (reverse lookup)
+      #
+      # Maps the aggregated trading cycle interval back to its volatility level name.
+      #
+      # @param interval [Integer, nil] Trading cycle interval in minutes
+      # @return [String] Volatility level name
+      def level_from_interval(interval)
+        return "medium" if interval.nil?
+
+        case interval
+        when 3 then "very_high"
+        when 6 then "high"
+        when 12 then "medium"
+        when 25 then "low"
+        else "medium"
+        end
       end
 
       # Returns configured intervals for each volatility level from settings

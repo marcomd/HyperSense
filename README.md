@@ -1,6 +1,6 @@
 # HyperSense
 
-**Version 0.33.3** | Autonomous AI Trading Agent for cryptocurrency markets.
+**Version 0.33.4** | Autonomous AI Trading Agent for cryptocurrency markets.
 
 ![HyperSense_cover1.jpg](docs/HyperSense_cover1.jpg)
 
@@ -86,6 +86,8 @@ HyperSense is an autonomous trading agent that operates in discrete cycles to an
 - High volatility (ATR ≥ 2%): 6 min
 - Medium volatility (ATR ≥ 1%): 12 min
 - Low volatility (ATR < 1%): 25 min
+
+The **aggregated volatility** uses the highest volatility level across all assets (BTC, ETH, SOL, BNB). If any asset is "medium" while others are "low", the aggregated level is "medium". Each trading decision also stores its **per-symbol ATR percentage** for granular analysis.
 
 ### Background Jobs Dashboard
 
@@ -1123,8 +1125,8 @@ const markets = cable.subscriptions.create({ channel: "MarketsChannel", symbol: 
 
 **Dashboard Components:**
 
-- **AccountSummary** - Open positions, unrealized PnL, margin used, daily P&L, volatility badge
-- **MarketOverview** - Current prices, RSI, MACD, EMA signals, forecasts, volatility per coin
+- **AccountSummary** - Open positions, unrealized PnL, margin used, daily P&L, aggregated volatility badge
+- **MarketOverview** - Current prices, RSI, MACD, EMA signals, forecasts, per-coin volatility with ATR %
 - **PositionsTable** - Open positions with entry price, current price, PnL (gross/net), SL/TP
 - **EquityCurve** - Cumulative PnL chart with win rate and statistics
 - **MacroStrategyCard** - Current market bias, risk tolerance, narrative, key levels

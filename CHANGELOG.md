@@ -2,6 +2,14 @@
 
 All notable changes to HyperSense.
 
+## [0.33.4] - 2026-01-02
+
+### Fixed
+- **Account Summary Aggregated Volatility** - Dashboard now shows highest volatility across all assets
+  - Previously showed the latest decision's symbol-specific volatility (regression from 0.33.3)
+  - Now derives aggregated level from `next_cycle_interval` (e.g., if SOL is "medium", shows "medium")
+  - Added `level_from_interval` helper to map interval back to volatility level
+
 ## [0.33.3] - 2026-01-02
 
 ### Fixed
