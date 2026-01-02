@@ -255,15 +255,30 @@ module Reasoning
         llm_model: @client.model
       )
 
+      expire_previous_strategies(strategy.id)
+
       @logger.info "[HighLevelAgent] Created macro strategy: bias=#{strategy.bias}, risk=#{strategy.risk_tolerance}"
       strategy
+    end
+
+    # Expire all other non-stale macro strategies
+    #
+    # @param current_id [Integer] ID of the newly created strategy to exclude
+    # @return [void]
+    def expire_previous_strategies(current_id)
+      expired_count = MacroStrategy
+        .where.not(id: current_id)
+        .where("valid_until > ?", Time.current)
+        .update_all(valid_until: Time.current)
+
+      @logger.info "[HighLevelAgent] Expired #{expired_count} previous strategies" if expired_count.positive?
     end
 
     def handle_invalid_response(errors, context, raw_response)
       @logger.error "[HighLevelAgent] Invalid LLM response: #{errors.join(', ')}"
 
       # Create a fallback neutral strategy with shorter validity
-      MacroStrategy.create!(
+      strategy = MacroStrategy.create!(
         market_narrative: "Unable to parse LLM response. Defaulting to neutral stance.",
         bias: "neutral",
         risk_tolerance: 0.5,
@@ -273,6 +288,10 @@ module Reasoning
         valid_until: Time.current + 6.hours,
         llm_model: @client.model
       )
+
+      expire_previous_strategies(strategy.id)
+
+      strategy
     end
   end
 end

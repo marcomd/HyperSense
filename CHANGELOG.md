@@ -2,6 +2,15 @@
 
 All notable changes to HyperSense.
 
+## [0.33.2] - 2026-01-02
+
+### Fixed
+- **Multiple Active MacroStrategies** - Only one MacroStrategy should be active at a time
+  - When `MacroStrategyJob` creates a new strategy, it now expires all previous non-stale strategies
+  - Sets `valid_until = Time.current` on previous strategies so they become stale immediately
+  - Applied to both successful LLM responses and fallback strategies
+  - Added `expire_previous_strategies` private method to `HighLevelAgent`
+
 ## [0.33.1] - 2026-01-02
 
 ### Fixed

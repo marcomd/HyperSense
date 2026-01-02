@@ -84,6 +84,38 @@ RSpec.describe Reasoning::HighLevelAgent do
         expect(strategy.llm_model).to be_present
         expect(strategy.llm_model).to eq(Settings.llm.send(Settings.llm.provider).model)
       end
+
+      it "expires previous non-stale strategies" do
+        old_strategy = create(:macro_strategy, valid_until: 12.hours.from_now)
+        expect(old_strategy.stale?).to be false
+
+        new_strategy = agent.analyze
+
+        old_strategy.reload
+        expect(old_strategy.stale?).to be true
+        expect(new_strategy.stale?).to be false
+      end
+
+      it "does not affect already stale strategies" do
+        stale_strategy = create(:macro_strategy, :stale)
+        original_valid_until = stale_strategy.valid_until
+
+        agent.analyze
+
+        stale_strategy.reload
+        expect(stale_strategy.valid_until).to eq(original_valid_until)
+      end
+
+      it "expires multiple previous strategies" do
+        old_strategies = create_list(:macro_strategy, 3, valid_until: 12.hours.from_now)
+
+        agent.analyze
+
+        old_strategies.each do |strategy|
+          strategy.reload
+          expect(strategy.stale?).to be true
+        end
+      end
     end
 
     context "with invalid LLM response" do
@@ -113,6 +145,16 @@ RSpec.describe Reasoning::HighLevelAgent do
       it "stores the llm_model even on invalid response" do
         strategy = agent.analyze
         expect(strategy.llm_model).to be_present
+      end
+
+      it "expires previous non-stale strategies even with fallback" do
+        old_strategy = create(:macro_strategy, valid_until: 12.hours.from_now)
+        expect(old_strategy.stale?).to be false
+
+        agent.analyze
+
+        old_strategy.reload
+        expect(old_strategy.stale?).to be true
       end
     end
 
