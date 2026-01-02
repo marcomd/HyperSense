@@ -13,7 +13,9 @@ FactoryBot.define do
         "ema_20" => 96_500,
         "ema_50" => 95_000,
         "ema_100" => 92_000,
+        "ema_200" => 90_000,
         "rsi_14" => 62.5,
+        "atr_14" => 1_455.0,
         "macd" => { "macd" => 250.0, "signal" => 200.0, "histogram" => 50.0 },
         "pivot_points" => { "pp" => 96_833, "r1" => 98_166, "r2" => 99_333, "s1" => 95_666, "s2" => 94_333 }
       }
@@ -37,7 +39,9 @@ FactoryBot.define do
           "ema_20" => 3_350,
           "ema_50" => 3_200,
           "ema_100" => 3_000,
+          "ema_200" => 2_800,
           "rsi_14" => 58.0,
+          "atr_14" => 51.0,
           "macd" => { "macd" => 25.0, "signal" => 20.0, "histogram" => 5.0 },
           "pivot_points" => { "pp" => 3_400, "r1" => 3_500, "r2" => 3_600, "s1" => 3_300, "s2" => 3_200 }
         }
@@ -64,6 +68,7 @@ FactoryBot.define do
           "ema_20" => 98_000,
           "ema_50" => 99_000,
           "rsi_14" => 25.0,
+          "atr_14" => 1_940.0,
           "macd" => { "macd" => -100.0, "signal" => -50.0, "histogram" => -50.0 }
         }
       end
@@ -75,7 +80,65 @@ FactoryBot.define do
           "ema_20" => 95_000,
           "ema_50" => 93_000,
           "rsi_14" => 78.0,
+          "atr_14" => 970.0,
           "macd" => { "macd" => 300.0, "signal" => 250.0, "histogram" => 50.0 }
+        }
+      end
+    end
+
+    # ATR volatility traits for testing atr_signal
+    # Low volatility: ATR < 1% of price
+    trait :low_volatility do
+      price { 100_000 }
+      indicators do
+        {
+          "ema_20" => 99_000,
+          "ema_50" => 98_000,
+          "rsi_14" => 50.0,
+          "atr_14" => 500.0,
+          "macd" => { "macd" => 100.0, "signal" => 80.0, "histogram" => 20.0 }
+        }
+      end
+    end
+
+    # Normal volatility: 1% <= ATR < 2% of price
+    trait :normal_volatility do
+      price { 100_000 }
+      indicators do
+        {
+          "ema_20" => 99_000,
+          "ema_50" => 98_000,
+          "rsi_14" => 50.0,
+          "atr_14" => 1_500.0,
+          "macd" => { "macd" => 100.0, "signal" => 80.0, "histogram" => 20.0 }
+        }
+      end
+    end
+
+    # High volatility: 2% <= ATR < 3% of price
+    trait :high_volatility do
+      price { 100_000 }
+      indicators do
+        {
+          "ema_20" => 99_000,
+          "ema_50" => 98_000,
+          "rsi_14" => 50.0,
+          "atr_14" => 2_500.0,
+          "macd" => { "macd" => 100.0, "signal" => 80.0, "histogram" => 20.0 }
+        }
+      end
+    end
+
+    # Very high volatility: ATR >= 3% of price
+    trait :very_high_volatility do
+      price { 100_000 }
+      indicators do
+        {
+          "ema_20" => 99_000,
+          "ema_50" => 98_000,
+          "rsi_14" => 50.0,
+          "atr_14" => 3_500.0,
+          "macd" => { "macd" => 100.0, "signal" => 80.0, "histogram" => 20.0 }
         }
       end
     end

@@ -81,7 +81,11 @@ module Execution
         end
 
         size = decision.target_position || Settings.risk.max_position_size
-        price = fetch_current_price(decision.symbol)
+        begin
+          price = fetch_current_price(decision.symbol)
+        rescue StandardError => e
+          return { valid: false, reason: "Failed to fetch price: #{e.message}" }
+        end
         leverage = decision.leverage || Settings.risk.default_leverage
         margin_required = @account_manager.margin_for_position(
           size: size, price: price, leverage: leverage
@@ -154,12 +158,26 @@ module Execution
 
       # Create/close position based on operation
       if decision.operation == "open"
+        # Calculate risk amount if SL provided
+        risk_amount = nil
+        if order_params[:stop_loss]
+          risk_amount = Risk::RiskManager.new.calculate_risk_amount(
+            size: order_params[:size],
+            entry_price: current_price,
+            stop_loss: order_params[:stop_loss],
+            direction: decision.direction
+          )
+        end
+
         position = @position_manager.open_position(
           symbol: order_params[:symbol],
           direction: decision.direction,
           size: order_params[:size],
           entry_price: current_price,
-          leverage: order_params[:leverage]
+          leverage: order_params[:leverage],
+          stop_loss_price: order_params[:stop_loss],
+          take_profit_price: order_params[:take_profit],
+          risk_amount: risk_amount
         )
         order.update!(position: position)
       elsif decision.operation == "close"
@@ -189,8 +207,107 @@ module Execution
     def execute_live_trade(decision, order_params)
       @logger.info "[OrderExecutor] Live trade: #{order_params}"
 
-      # This will raise WriteOperationNotImplemented until gem is enhanced
-      @client.place_order(order_params)
+      # Place order on Hyperliquid
+      result = @client.place_order(order_params)
+
+      # Check for success
+      unless result["status"] == "ok"
+        error_msg = result["response"] || "Unknown error from Hyperliquid"
+        raise "Order rejected by Hyperliquid: #{error_msg}"
+      end
+
+      # Extract fill information from response
+      response_data = result.dig("response", "data", "statuses", 0)
+
+      # Get current price for position tracking (fallback if fill price not available)
+      current_price = fetch_current_price(order_params[:symbol])
+
+      # Create order record
+      order = Order.create!(
+        trading_decision: decision,
+        symbol: order_params[:symbol],
+        order_type: order_params[:order_type],
+        side: order_params[:side],
+        size: order_params[:size],
+        status: "pending"
+      )
+
+      # Handle fill status from Hyperliquid response
+      handle_order_fill_status(order, response_data, order_params, current_price, decision)
+
+      # Mark decision as executed
+      decision.mark_executed!
+
+      # Log success
+      log_success(order, order_params, result)
+
+      @logger.info "[OrderExecutor] Live trade executed: Order ##{order.id}"
+      order
+    end
+
+    # Handle order fill status from Hyperliquid response
+    # @param order [Order]
+    # @param response_data [Hash, nil]
+    # @param order_params [Hash]
+    # @param current_price [Numeric]
+    # @param decision [TradingDecision]
+    def handle_order_fill_status(order, response_data, order_params, current_price, decision)
+      return unless response_data
+
+      if response_data.key?("filled") || response_data.key?("resting")
+        # Extract order ID from response
+        order_id = response_data.dig("filled", "oid") || response_data.dig("resting", "oid")
+        order.submit!(order_id.to_s) if order_id
+
+        # If filled immediately (market order typically fills immediately)
+        if response_data.key?("filled")
+          filled_price = response_data.dig("filled", "avgPx")&.to_d || current_price
+          order.fill!(filled_size: order_params[:size], average_price: filled_price)
+
+          # Handle position creation/closing
+          handle_position_after_fill(decision, order, order_params, filled_price)
+        end
+      elsif response_data.key?("error")
+        error_msg = response_data["error"]
+        @logger.error "[OrderExecutor] Order error from Hyperliquid: #{error_msg}"
+        raise "Order failed on Hyperliquid: #{error_msg}"
+      end
+    end
+
+    # Handle position after order fill
+    # @param decision [TradingDecision]
+    # @param order [Order]
+    # @param order_params [Hash]
+    # @param fill_price [Numeric]
+    def handle_position_after_fill(decision, order, order_params, fill_price)
+      if decision.operation == "open"
+        # Calculate risk amount if SL provided
+        risk_amount = nil
+        if order_params[:stop_loss]
+          risk_amount = Risk::RiskManager.new.calculate_risk_amount(
+            size: order_params[:size],
+            entry_price: fill_price,
+            stop_loss: order_params[:stop_loss],
+            direction: decision.direction
+          )
+        end
+
+        position = @position_manager.open_position(
+          symbol: order_params[:symbol],
+          direction: decision.direction,
+          size: order_params[:size],
+          entry_price: fill_price,
+          leverage: order_params[:leverage],
+          stop_loss_price: order_params[:stop_loss],
+          take_profit_price: order_params[:take_profit],
+          risk_amount: risk_amount
+        )
+        order.update!(position: position)
+      elsif decision.operation == "close"
+        position = @position_manager.get_open_position(decision.symbol)
+        @position_manager.close_position(position) if position
+        order.update!(position: position)
+      end
     end
 
     def fetch_current_price(symbol)

@@ -7,23 +7,81 @@ module Reasoning
   # and make specific trading decisions.
   #
   class LowLevelAgent
-    def self.model = Settings.llm.model
+    # Limits for context data included in prompts
+    RECENT_NEWS_LIMIT = 5
+    WHALE_ALERTS_LIMIT = 5
+
     def self.max_tokens = Settings.llm.low_level.max_tokens
     def self.temperature = Settings.llm.low_level.temperature
 
     SYSTEM_PROMPT = <<~PROMPT
+      # Financial analysis of the crypto market
+
+      ## Role
       You are a cryptocurrency trade execution specialist for an autonomous trading system.
       Your role is to make specific trading decisions based on current market conditions.
+      It is extremely important to provide accurate and decisive guidance because the savings of many people depend on these decisions.
 
-      IMPORTANT: You must respond ONLY with valid JSON. No explanations outside the JSON.
+      ## Position Awareness
+      You will receive information about whether a position already exists for this symbol.
+      - If NO position exists (has_position: false): You can only choose "open" or "hold"
+      - If a position EXISTS (has_position: true): You can choose "close" or "hold" (NOT "open")
 
-      Decision framework:
-      1. Analyze current price vs technical indicators
-      2. Consider macro strategy bias and risk tolerance
-      3. Evaluate entry/exit opportunities
-      4. Set appropriate stop-loss and take-profit levels
+      Decision logic:
+      - NO position + bullish TECHNICAL signals = consider "open" long
+      - NO position + bearish TECHNICAL signals = consider "open" short
+      - NO position + unclear signals = "hold" (wait for better setup)
+      - HAS position + CLOSE conditions met (see below) = "close"
+      - HAS position + no CLOSE conditions met = "hold"
 
-      Output JSON schema for OPEN action:
+      ## Direction Independence from Macro
+      The macro bias is a SUGGESTION, not a requirement. When technical signals conflict with macro:
+      - Strong technical signals (RSI extreme + MACD divergence) OVERRIDE macro bias
+      - You CAN and SHOULD open SHORTS during bullish macro when RSI > 70 (overbought) + bearish MACD
+      - You CAN and SHOULD open LONGS during bearish macro when RSI < 30 (oversold) + bullish MACD
+      - Technical indicators are KING - they reflect actual price action
+
+      ## RSI Entry Filters (CRITICAL - check BEFORE opening)
+      - NEVER open LONG if RSI > 70 (overbought) - wait for pullback below 65
+      - NEVER open SHORT if RSI < 30 (oversold) - wait for bounce above 35
+      - When RSI is 65-70 and opening LONG, reduce confidence by 0.15
+      - When RSI is 30-35 and opening SHORT, reduce confidence by 0.15
+
+      ## CLOSE Operation Rules (CRITICAL - prevent premature exits)
+      CLOSE operation is ONLY valid when ONE of these conditions is met:
+      1. Price is within 1% of take-profit target
+      2. Price is within 1% of stop-loss level
+      3. CONFIRMED trend reversal: BOTH RSI crosses 50 level AND MACD histogram changes sign
+      4. Position has been held for at least 30 minutes AND shows clear reversal
+
+      Do NOT close due to:
+      - "Technical deterioration" alone
+      - Price moving slightly against position (that's what stop-loss is for!)
+      - Slight indicator changes without confirmed trend reversal
+      - Fear or uncertainty - let the stop-loss protect you
+
+      IMPORTANT: Let stop-loss do its job! If price moves against you but hasn't hit SL, HOLD.
+
+      ## Input Weighting System
+      You will receive data with assigned weights indicating their importance in your decision:
+      - TECHNICAL (weight: 0.50) - Technical indicators (EMA, RSI, MACD, Pivots) are your PRIMARY signal. These are proven and based on actual price action.
+      - SENTIMENT (weight: 0.25) - Market sentiment (Fear & Greed, news) provides confirmation or contrarian signals.
+      - FORECAST (weight: 0.15) - Price predictions offer supplementary context but use with caution in volatile markets.
+      - WHALE_ALERTS (weight: 0.10) - Large capital movements indicate smart money positioning.
+
+      When data sources conflict, weight your decision according to these priorities.
+      If forecast data is unavailable, redistribute its weight to other available sources.
+
+      ## Decision Framework
+      1. Check CURRENT POSITION STATUS first - this determines available operations
+      2. Start with TECHNICAL indicators as primary direction indicator (EMA trends, RSI, MACD)
+      3. Apply RSI entry filters (no longs when overbought, no shorts when oversold)
+      4. Confirm with SENTIMENT data (Fear & Greed, news)
+      5. Consider FORECAST predictions as supplementary context
+      6. Factor in WHALE_ALERTS for potential sudden moves
+      7. Set appropriate stop-loss and take-profit levels (for open operations)
+
+      ## Output JSON schema for OPEN action (only when NO position exists):
       {
         "operation": "open",
         "symbol": "BTC" | "ETH" | "SOL" | "BNB",
@@ -33,10 +91,18 @@ module Reasoning
         "stop_loss": number (price level),
         "take_profit": number (price level),
         "confidence": number (0.6 to 1.0),
-        "reasoning": "string - concise explanation"
+        "reasoning": "string - concise explanation referencing weighted inputs"
       }
 
-      Output JSON schema for HOLD action:
+      ## Output JSON schema for CLOSE action (only when position EXISTS):
+      {
+        "operation": "close",
+        "symbol": "BTC" | "ETH" | "SOL" | "BNB",
+        "confidence": number (0.6 to 1.0),
+        "reasoning": "string - MUST cite specific close condition met (TP near, SL near, or confirmed reversal)"
+      }
+
+      ## Output JSON schema for HOLD action:
       {
         "operation": "hold",
         "symbol": "BTC" | "ETH" | "SOL" | "BNB",
@@ -44,18 +110,24 @@ module Reasoning
         "reasoning": "string - explanation for not trading"
       }
 
-      Rules:
-      - ONLY suggest "open" if you see a clear opportunity aligned with macro bias
+      ## Rules:
+      - Check if a position exists FIRST before deciding on operation
+      - If NO position: Only "open" or "hold" are valid operations
+      - If position EXISTS: Only "close" or "hold" are valid (cannot open another position)
+      - ONLY suggest "open" if technical signals are clear AND RSI allows entry
       - "hold" is the default when conditions are unclear or no edge exists
+      - "close" should ONLY be used when close conditions above are met
       - Confidence < 0.6 should result in "hold"
       - Stop-loss is REQUIRED for any "open" operation
       - Respect max leverage from risk parameters
-      - Consider risk/reward ratio (aim for at least 2:1)
+      - Consider risk/reward ratio (aim for at least 1.5:1)
+      - IMPORTANT: You must respond ONLY with valid JSON. No explanations outside the JSON.
     PROMPT
 
     def initialize
-      @client = Anthropic::Client.new(
-        api_key: Rails.application.credentials.dig(:anthropic, :api_key)
+      @client = LLM::Client.new(
+        max_tokens: self.class.max_tokens,
+        temperature: self.class.temperature
       )
       @logger = Rails.logger
     end
@@ -75,10 +147,10 @@ module Reasoning
       parsed = DecisionParser.parse_trading_decision(response)
 
       create_decision(symbol, parsed, context, response, macro_strategy)
-    rescue Anthropic::RateLimitError => e
+    rescue LLM::Errors::RateLimitError => e
       @logger.warn "[LowLevelAgent] Rate limited for #{symbol}: #{e.message}"
       create_error_decision(symbol, "Rate limited - holding", macro_strategy)
-    rescue Anthropic::Errors::APIError, Faraday::Error => e
+    rescue LLM::Errors::APIError, LLM::Errors::ConfigurationError, Faraday::Error => e
       @logger.error "[LowLevelAgent] API error for #{symbol}: #{e.message}"
       create_error_decision(symbol, e.message, macro_strategy)
     rescue StandardError => e
@@ -98,48 +170,133 @@ module Reasoning
     private
 
     def build_user_prompt(context)
+      weights = context[:weights] || default_weights
       <<~PROMPT
         Make a trading decision for #{context[:symbol]} based on the following data:
 
         ## Current Time
         #{context[:timestamp]}
 
-        ## Market Data
-        - Current Price: $#{context.dig(:market_data, :price)}
-        - 24h High: $#{context.dig(:market_data, :high_24h)}
-        - 24h Low: $#{context.dig(:market_data, :low_24h)}
-        - 24h Change: #{context.dig(:market_data, :price_change_pct_24h)}%
+        ## Current Position Status
+        #{format_position(context[:current_position])}
 
-        ## Technical Indicators
+        ## Input Weights (prioritize accordingly)
+        #{format_weights(weights)}
+
+        ---
+
+        ## [FORECAST] Price Predictions (weight: #{weights[:forecast]})
+        #{format_forecast(context[:forecast])}
+
+        ---
+
+        ## [SENTIMENT] Market Sentiment (weight: #{weights[:sentiment]})
+        - Fear & Greed Index: #{context.dig(:sentiment, :fear_greed_value)} (#{context.dig(:sentiment, :fear_greed_classification)})
+        #{format_news(context[:news])}
+
+        ---
+
+        ## [TECHNICAL] Technical Analysis (weight: #{weights[:technical]})
+        Current Price: $#{context.dig(:market_data, :price)} (24h: #{context.dig(:market_data, :price_change_pct_24h)}%)
+
+        Indicators:
         - EMA-20: $#{format_number(context.dig(:technical_indicators, :ema_20))}
         - EMA-50: $#{format_number(context.dig(:technical_indicators, :ema_50))}
+        - EMA-100: $#{format_number(context.dig(:technical_indicators, :ema_100))}
+        - EMA-200: $#{format_number(context.dig(:technical_indicators, :ema_200))} (long-term trend)
         - RSI(14): #{format_number(context.dig(:technical_indicators, :rsi_14))}
         - MACD: #{format_macd(context.dig(:technical_indicators, :macd))}
         - Pivot Points: #{format_pivots(context.dig(:technical_indicators, :pivot_points))}
 
-        ## Signals
+        Signals:
         - RSI Signal: #{context.dig(:technical_indicators, :signals, :rsi)}
         - MACD Signal: #{context.dig(:technical_indicators, :signals, :macd)}
         - Above EMA-20: #{context.dig(:technical_indicators, :signals, :above_ema_20)}
         - Above EMA-50: #{context.dig(:technical_indicators, :signals, :above_ema_50)}
+        - Above EMA-200: #{context.dig(:technical_indicators, :signals, :above_ema_200)} (bull/bear market structure)
 
-        ## Sentiment
-        - Fear & Greed: #{context.dig(:sentiment, :fear_greed_value)} (#{context.dig(:sentiment, :fear_greed_classification)})
+        Recent Action:
+        - Trend: #{context.dig(:recent_price_action, :trend)}
+        - 24h Range: $#{context.dig(:recent_price_action, :low)} - $#{context.dig(:recent_price_action, :high)}
+
+        ---
+
+        ## [WHALE_ALERTS] Large Capital Movements (weight: #{weights[:whale_alerts]})
+        #{format_whale_alerts(context[:whale_alerts])}
+
+        ---
 
         ## Macro Strategy
         #{format_macro_context(context[:macro_context])}
-
-        ## Recent Price Action
-        - Trend: #{context.dig(:recent_price_action, :trend)}
-        - 24h Range: $#{context.dig(:recent_price_action, :low)} - $#{context.dig(:recent_price_action, :high)}
 
         ## Risk Parameters
         - Max Position: #{(context.dig(:risk_parameters, :max_position_size) || 0.05) * 100}% of capital
         - Max Leverage: #{context.dig(:risk_parameters, :max_leverage) || 10}x
         - Min Confidence: #{(context.dig(:risk_parameters, :min_confidence) || 0.6) * 100}%
 
-        Provide your trading decision in JSON format.
+        Provide your trading decision in JSON format, weighing inputs according to their assigned weights.
       PROMPT
+    end
+
+    def default_weights
+      {
+        forecast: Settings.weights.forecast,
+        sentiment: Settings.weights.sentiment,
+        technical: Settings.weights.technical,
+        whale_alerts: Settings.weights.whale_alerts
+      }
+    end
+
+    def format_weights(weights)
+      weights.map { |k, v| "- #{k.to_s.upcase}: #{v}" }.join("\n")
+    end
+
+    def format_position(position)
+      return "NO POSITION - You can OPEN a new position or HOLD" unless position&.dig(:has_position)
+
+      <<~POS.strip
+        ACTIVE #{position[:direction].upcase} POSITION:
+        - Size: #{position[:size]}
+        - Entry Price: $#{format_number(position[:entry_price])}
+        - Current Price: $#{format_number(position[:current_price])}
+        - Unrealized PnL: $#{format_number(position[:unrealized_pnl])} (#{format_number(position[:pnl_percent])}%)
+        - Leverage: #{position[:leverage]}x
+        - Stop Loss: #{position[:stop_loss_price] ? "$#{format_number(position[:stop_loss_price])}" : "Not set"}
+        - Take Profit: #{position[:take_profit_price] ? "$#{format_number(position[:take_profit_price])}" : "Not set"}
+        - Opened: #{position[:opened_at]}
+
+        ACTION OPTIONS: You can CLOSE this position or HOLD (cannot OPEN another)
+      POS
+    end
+
+    def format_forecast(forecast)
+      return "No forecast data available - redistribute weight to other signals" unless forecast
+
+      lines = []
+      forecast.each do |timeframe, data|
+        lines << "- #{timeframe}: Current $#{format_number(data[:current_price])} → Predicted $#{format_number(data[:predicted_price])} (#{data[:direction]})"
+      end
+      lines.join("\n")
+    end
+
+    def format_news(news)
+      return "" unless news&.any?
+
+      lines = [ "\nRecent News:" ]
+      news.first(RECENT_NEWS_LIMIT).each do |item|
+        lines << "- #{item[:title]}"
+      end
+      lines.join("\n")
+    end
+
+    def format_whale_alerts(alerts)
+      return "No recent whale alerts" unless alerts&.any?
+
+      lines = []
+      alerts.first(WHALE_ALERTS_LIMIT).each do |alert|
+        lines << "- #{alert[:action]}: #{alert[:amount]} (#{alert[:usd_value]})"
+      end
+      lines.join("\n")
     end
 
     def format_number(value)
@@ -179,21 +336,15 @@ module Reasoning
     end
 
     def call_llm(user_prompt)
-      @logger.info "[LowLevelAgent] Calling Claude API..."
+      @logger.info "[LowLevelAgent] Calling LLM API (#{@client.provider})..."
 
-      response = @client.messages.create(
-        model: self.class.model,
-        max_tokens: self.class.max_tokens,
-        temperature: self.class.temperature,
-        system: SYSTEM_PROMPT,
-        messages: [ { role: "user", content: user_prompt } ]
+      response = @client.chat(
+        system_prompt: SYSTEM_PROMPT,
+        user_prompt: user_prompt
       )
 
-      content = response.content.first
-      raise "Empty response from LLM" unless content&.text
-
       @logger.info "[LowLevelAgent] Received response"
-      content.text
+      response
     end
 
     def create_decision(symbol, parsed, context, raw_response, macro_strategy)
@@ -208,7 +359,8 @@ module Reasoning
           operation: data[:operation],
           direction: data[:direction],
           confidence: data[:confidence],
-          status: "pending"
+          status: "pending",
+          llm_model: @client.model
         )
       else
         @logger.warn "[LowLevelAgent] Invalid response for #{symbol}: #{parsed[:errors].join(', ')}"
@@ -221,7 +373,8 @@ module Reasoning
           operation: "hold",
           confidence: 0.0,
           status: "rejected",
-          rejection_reason: "Invalid LLM response: #{parsed[:errors].join(', ')}"
+          rejection_reason: "Invalid LLM response: #{parsed[:errors].join(', ')}",
+          llm_model: @client.model
         )
       end
     end
@@ -236,7 +389,8 @@ module Reasoning
         operation: "hold",
         confidence: 0.0,
         status: "rejected",
-        rejection_reason: error_message
+        rejection_reason: error_message,
+        llm_model: @client.model
       )
     end
 

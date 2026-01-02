@@ -31,11 +31,7 @@ RSpec.describe Reasoning::LowLevelAgent do
       end
 
       before do
-        allow_any_instance_of(Anthropic::Client).to receive_message_chain(:messages, :create).and_return(
-          OpenStruct.new(
-            content: [ OpenStruct.new(text: open_decision_response) ]
-          )
-        )
+        allow_any_instance_of(LLM::Client).to receive(:chat).and_return(open_decision_response)
       end
 
       it "creates a TradingDecision record" do
@@ -90,6 +86,12 @@ RSpec.describe Reasoning::LowLevelAgent do
         decision = agent.decide(symbol: "BTC", macro_strategy: macro_strategy)
         expect(decision.status).to eq("pending")
       end
+
+      it "stores the llm_model" do
+        decision = agent.decide(symbol: "BTC", macro_strategy: macro_strategy)
+        expect(decision.llm_model).to be_present
+        expect(decision.llm_model).to eq(Settings.llm.send(Settings.llm.provider).model)
+      end
     end
 
     context "with hold decision response" do
@@ -103,11 +105,7 @@ RSpec.describe Reasoning::LowLevelAgent do
       end
 
       before do
-        allow_any_instance_of(Anthropic::Client).to receive_message_chain(:messages, :create).and_return(
-          OpenStruct.new(
-            content: [ OpenStruct.new(text: hold_decision_response) ]
-          )
-        )
+        allow_any_instance_of(LLM::Client).to receive(:chat).and_return(hold_decision_response)
       end
 
       it "creates a hold decision" do
@@ -127,11 +125,7 @@ RSpec.describe Reasoning::LowLevelAgent do
       let(:invalid_response) { "{ invalid json" }
 
       before do
-        allow_any_instance_of(Anthropic::Client).to receive_message_chain(:messages, :create).and_return(
-          OpenStruct.new(
-            content: [ OpenStruct.new(text: invalid_response) ]
-          )
-        )
+        allow_any_instance_of(LLM::Client).to receive(:chat).and_return(invalid_response)
       end
 
       it "creates a rejected hold decision" do
@@ -149,6 +143,11 @@ RSpec.describe Reasoning::LowLevelAgent do
         decision = agent.decide(symbol: "BTC", macro_strategy: macro_strategy)
         expect(decision.confidence).to eq(0.0)
       end
+
+      it "stores the llm_model even on invalid response" do
+        decision = agent.decide(symbol: "BTC", macro_strategy: macro_strategy)
+        expect(decision.llm_model).to be_present
+      end
     end
 
     context "without macro_strategy" do
@@ -162,11 +161,7 @@ RSpec.describe Reasoning::LowLevelAgent do
       end
 
       before do
-        allow_any_instance_of(Anthropic::Client).to receive_message_chain(:messages, :create).and_return(
-          OpenStruct.new(
-            content: [ OpenStruct.new(text: hold_response) ]
-          )
-        )
+        allow_any_instance_of(LLM::Client).to receive(:chat).and_return(hold_response)
       end
 
       it "works without macro strategy" do
@@ -178,8 +173,8 @@ RSpec.describe Reasoning::LowLevelAgent do
 
     context "with API error" do
       before do
-        allow_any_instance_of(Anthropic::Client).to receive_message_chain(:messages, :create).and_raise(
-          Faraday::ConnectionFailed.new("Connection failed")
+        allow_any_instance_of(LLM::Client).to receive(:chat).and_raise(
+          LLM::Errors::APIError.new("Connection failed")
         )
       end
 
@@ -192,6 +187,112 @@ RSpec.describe Reasoning::LowLevelAgent do
       it "includes error in rejection reason" do
         decision = agent.decide(symbol: "BTC", macro_strategy: macro_strategy)
         expect(decision.rejection_reason).to include("Connection failed")
+      end
+
+      it "stores the llm_model even on API error" do
+        decision = agent.decide(symbol: "BTC", macro_strategy: macro_strategy)
+        expect(decision.llm_model).to be_present
+      end
+    end
+
+    context "with close decision response" do
+      let!(:open_position) do
+        create(:position,
+          symbol: "BTC",
+          direction: "long",
+          size: 0.05,
+          entry_price: 95_000,
+          current_price: 100_000,
+          unrealized_pnl: 250,
+          leverage: 5)
+      end
+
+      let(:close_decision_response) do
+        {
+          operation: "close",
+          symbol: "BTC",
+          confidence: 0.85,
+          reasoning: "Take profit target reached, securing gains"
+        }.to_json
+      end
+
+      before do
+        allow_any_instance_of(LLM::Client).to receive(:chat).and_return(close_decision_response)
+      end
+
+      it "creates a close decision" do
+        decision = agent.decide(symbol: "BTC", macro_strategy: macro_strategy)
+        expect(decision.operation).to eq("close")
+      end
+
+      it "sets the confidence" do
+        decision = agent.decide(symbol: "BTC", macro_strategy: macro_strategy)
+        expect(decision.confidence).to eq(0.85)
+      end
+
+      it "is actionable" do
+        decision = agent.decide(symbol: "BTC", macro_strategy: macro_strategy)
+        expect(decision.actionable?).to be true
+      end
+
+      it "stores the context with position data" do
+        decision = agent.decide(symbol: "BTC", macro_strategy: macro_strategy)
+        expect(decision.context_sent["current_position"]["has_position"]).to be true
+        expect(decision.context_sent["current_position"]["direction"]).to eq("long")
+      end
+    end
+
+    context "position awareness in context" do
+      let(:hold_response) do
+        {
+          operation: "hold",
+          symbol: "BTC",
+          confidence: 0.5,
+          reasoning: "No clear setup"
+        }.to_json
+      end
+
+      before do
+        allow_any_instance_of(LLM::Client).to receive(:chat).and_return(hold_response)
+      end
+
+      context "without open position" do
+        it "includes current_position in context_sent" do
+          decision = agent.decide(symbol: "BTC", macro_strategy: macro_strategy)
+          expect(decision.context_sent).to include("current_position")
+        end
+
+        it "has has_position: false when no position exists" do
+          decision = agent.decide(symbol: "BTC", macro_strategy: macro_strategy)
+          expect(decision.context_sent["current_position"]["has_position"]).to be false
+        end
+      end
+
+      context "with open position" do
+        let!(:open_position) do
+          create(:position,
+            symbol: "BTC",
+            direction: "short",
+            size: 0.03,
+            entry_price: 100_000,
+            current_price: 97_000,
+            unrealized_pnl: 90,
+            leverage: 3)
+        end
+
+        it "has has_position: true when position exists" do
+          decision = agent.decide(symbol: "BTC", macro_strategy: macro_strategy)
+          expect(decision.context_sent["current_position"]["has_position"]).to be true
+        end
+
+        it "includes position details in context" do
+          decision = agent.decide(symbol: "BTC", macro_strategy: macro_strategy)
+          position_data = decision.context_sent["current_position"]
+          expect(position_data["direction"]).to eq("short")
+          expect(position_data["size"]).to eq(0.03)
+          expect(position_data["entry_price"]).to eq(100_000.0)
+          expect(position_data["leverage"]).to eq(3)
+        end
       end
     end
   end
@@ -207,11 +308,7 @@ RSpec.describe Reasoning::LowLevelAgent do
     end
 
     before do
-      allow_any_instance_of(Anthropic::Client).to receive_message_chain(:messages, :create).and_return(
-        OpenStruct.new(
-          content: [ OpenStruct.new(text: hold_response) ]
-        )
-      )
+      allow_any_instance_of(LLM::Client).to receive(:chat).and_return(hold_response)
     end
 
     it "returns decisions for all configured assets" do
@@ -233,10 +330,6 @@ RSpec.describe Reasoning::LowLevelAgent do
   end
 
   describe "LLM configuration" do
-    it "reads model from settings" do
-      expect(described_class.model).to eq(Settings.llm.model)
-    end
-
     it "reads max tokens from settings" do
       expect(described_class.max_tokens).to eq(Settings.llm.low_level.max_tokens)
       expect(described_class.max_tokens).to be > 0

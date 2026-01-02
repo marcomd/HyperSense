@@ -12,10 +12,12 @@ module Reasoning
   class ContextAssembler
     LOOKBACK_HOURS = 24
     LOOKBACK_DAYS_MACRO = 7
+    PRICE_ACTION_CANDLES_LIMIT = 24
 
     # @param symbol [String, nil] Asset symbol for single-asset context
     def initialize(symbol: nil)
       @symbol = symbol
+      @position_manager = Execution::PositionManager.new
     end
 
     # Assemble context for low-level agent (trade decisions)
@@ -25,6 +27,14 @@ module Reasoning
       {
         timestamp: Time.current.iso8601,
         symbol: @symbol,
+        weights: context_weights,
+        # Position awareness
+        current_position: current_position_for(@symbol),
+        # Weighted data sources
+        forecast: forecast_for(@symbol),
+        news: recent_news,
+        whale_alerts: recent_whale_alerts,
+        # Existing data
         market_data: market_data_for(@symbol),
         technical_indicators: technical_indicators_for(@symbol),
         sentiment: current_sentiment,
@@ -39,11 +49,82 @@ module Reasoning
     def for_macro_analysis
       {
         timestamp: Time.current.iso8601,
+        weights: context_weights,
+        # Weighted data sources
+        forecasts: forecasts_for_all_assets,
+        news: recent_news,
+        whale_alerts: recent_whale_alerts,
+        # Existing data
         assets_overview: assets_overview,
         market_sentiment: current_sentiment,
         historical_trends: historical_trends,
         risk_parameters: risk_parameters
       }
+    end
+
+    # Get configured context weights
+    # @return [Hash] Weight configuration
+    def context_weights
+      {
+        forecast: Settings.weights.forecast,
+        sentiment: Settings.weights.sentiment,
+        technical: Settings.weights.technical,
+        whale_alerts: Settings.weights.whale_alerts
+      }
+    end
+
+    # Get forecast data for a symbol from Prophet predictions
+    # @param symbol [String] Asset symbol
+    # @return [Hash, nil] Forecast data by timeframe or nil if not available
+    def forecast_for(symbol)
+      forecasts = Forecast.latest_all_timeframes_for(symbol)
+      return nil if forecasts.empty?
+
+      forecasts
+    end
+
+    # Get forecasts for all configured assets
+    # @return [Hash, nil] Forecasts by symbol or nil
+    def forecasts_for_all_assets
+      result = Settings.assets.to_a.to_h do |symbol|
+        forecasts = forecast_for(symbol)
+        next [ symbol, nil ] unless forecasts
+
+        # Extract the 1h forecast for macro context (most relevant timeframe)
+        forecast_1h = forecasts["1h"]
+        [
+          symbol,
+          {
+            current_price: forecast_1h&.dig(:current_price),
+            predicted_1h: forecast_1h&.dig(:predicted_price),
+            direction: forecast_1h&.dig(:direction)
+          }
+        ]
+      end.compact
+
+      result.empty? ? nil : result
+    end
+
+    # Get recent news items from RSS fetcher
+    # @return [Array, nil] Array of news items or nil if not available
+    def recent_news
+      fetcher = DataIngestion::NewsFetcher.new
+      news = fetcher.recent_news(limit: 5)
+      news.presence
+    rescue StandardError => e
+      Rails.logger.warn "[ContextAssembler] Failed to fetch news: #{e.message}"
+      nil
+    end
+
+    # Get recent whale alerts from whale-alert.io
+    # @return [Array, nil] Array of whale alerts or nil if not available
+    def recent_whale_alerts
+      fetcher = DataIngestion::WhaleAlertFetcher.new
+      alerts = fetcher.recent_alerts(limit: 5)
+      alerts.presence
+    rescue StandardError => e
+      Rails.logger.warn "[ContextAssembler] Failed to fetch whale alerts: #{e.message}"
+      nil
     end
 
     private
@@ -77,14 +158,18 @@ module Reasoning
         ema_20: indicators["ema_20"],
         ema_50: indicators["ema_50"],
         ema_100: indicators["ema_100"],
+        ema_200: indicators["ema_200"],
         rsi_14: indicators["rsi_14"],
+        atr_14: indicators["atr_14"],
         macd: indicators["macd"],
         pivot_points: indicators["pivot_points"],
         signals: {
           rsi: snapshot.rsi_signal,
           macd: snapshot.macd_signal,
+          atr: snapshot.atr_signal,
           above_ema_20: snapshot.above_ema?(20),
-          above_ema_50: snapshot.above_ema?(50)
+          above_ema_50: snapshot.above_ema?(50),
+          above_ema_200: snapshot.above_ema?(200)
         }
       }
     end
@@ -126,7 +211,7 @@ module Reasoning
       snapshots = MarketSnapshot.for_symbol(symbol)
                                 .last_hours(LOOKBACK_HOURS)
                                 .recent
-                                .limit(24)
+                                .limit(PRICE_ACTION_CANDLES_LIMIT)
 
       return {} if snapshots.empty?
 
@@ -230,6 +315,28 @@ module Reasoning
         max_leverage: Settings.risk.max_leverage,
         default_leverage: Settings.risk.default_leverage,
         max_open_positions: Settings.risk.max_open_positions
+      }
+    end
+
+    # Get current position information for a symbol
+    # @param symbol [String] Asset symbol
+    # @return [Hash] Position data or indication of no position
+    def current_position_for(symbol)
+      position = @position_manager.get_open_position(symbol)
+      return { has_position: false } unless position
+
+      {
+        has_position: true,
+        direction: position.direction,
+        size: position.size.to_f,
+        entry_price: position.entry_price.to_f,
+        current_price: position.current_price.to_f,
+        unrealized_pnl: position.unrealized_pnl.to_f,
+        pnl_percent: position.pnl_percent,
+        leverage: position.leverage,
+        stop_loss_price: position.stop_loss_price&.to_f,
+        take_profit_price: position.take_profit_price&.to_f,
+        opened_at: position.opened_at&.iso8601
       }
     end
   end

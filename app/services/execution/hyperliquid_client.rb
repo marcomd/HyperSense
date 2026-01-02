@@ -5,13 +5,10 @@ module Execution
   #
   # Provides:
   # - Connection management with automatic testnet/mainnet switching
-  # - Credential management from Rails credentials
+  # - Credential management from ENV variables (HYPERLIQUID_ADDRESS, HYPERLIQUID_PRIVATE_KEY)
+  # - Read operations (prices, positions, order book, candles)
+  # - Write operations (order placement, cancellation) via EIP-712 signing
   # - Error handling and wrapping
-  # - Rate limiting awareness
-  #
-  # Currently supports read operations only. Write operations require
-  # EIP-712 signing which is not yet implemented in the gem.
-  # See: docs/HYPERLIQUID_GEM_WRITE_OPERATIONS_SPEC.md
   #
   class HyperliquidClient
     # Custom errors
@@ -43,7 +40,7 @@ module Execution
     # @return [String]
     # @raise [ConfigurationError] if not configured
     def address
-      raise ConfigurationError, "Hyperliquid address not configured in credentials" unless wallet_address.present?
+      raise ConfigurationError, "Hyperliquid address not configured. Add HYPERLIQUID_ADDRESS to .env" unless wallet_address.present?
       wallet_address
     end
 
@@ -60,7 +57,7 @@ module Execution
     # @return [Hash] User state with positions and margin info
     def user_state(user_address)
       with_error_handling do
-        client.user_state(user_address)
+        info.user_state(user_address)
       end
     end
 
@@ -69,7 +66,7 @@ module Execution
     # @return [Array<Hash>] Open orders
     def open_orders(user_address)
       with_error_handling do
-        client.open_orders(user_address)
+        info.open_orders(user_address)
       end
     end
 
@@ -78,7 +75,7 @@ module Execution
     # @return [Array<Hash>] Recent fills
     def user_fills(user_address)
       with_error_handling do
-        client.user_fills(user_address)
+        info.user_fills(user_address)
       end
     end
 
@@ -86,7 +83,7 @@ module Execution
     # @return [Hash] Asset metadata including universe
     def meta
       with_error_handling do
-        client.meta
+        info.meta
       end
     end
 
@@ -94,7 +91,7 @@ module Execution
     # @return [Hash] Symbol => mid price mapping
     def all_mids
       with_error_handling do
-        client.all_mids
+        info.all_mids
       end
     end
 
@@ -103,7 +100,7 @@ module Execution
     # @return [Hash] L2 order book
     def l2_book(coin)
       with_error_handling do
-        client.l2_book(coin)
+        info.l2_book(coin)
       end
     end
 
@@ -115,34 +112,71 @@ module Execution
     # @return [Array<Hash>] Candle data
     def candles_snapshot(coin, interval, start_time, end_time)
       with_error_handling do
-        client.candles_snapshot(coin, interval, start_time, end_time)
+        info.candles_snapshot(coin, interval, start_time, end_time)
       end
     end
 
-    # === Write Operations (Not Yet Implemented) ===
+    # === Write Operations ===
 
-    # Place an order on Hyperliquid
-    # @raise [WriteOperationNotImplemented]
-    def place_order(_params)
-      raise WriteOperationNotImplemented,
-            "Order placement requires EIP-712 signing. " \
-            "See docs/HYPERLIQUID_GEM_WRITE_OPERATIONS_SPEC.md for implementation guide."
+    # Place a market order on Hyperliquid
+    # @param params [Hash] Order parameters
+    #   - :symbol [String] Asset symbol (e.g., "BTC")
+    #   - :side [String] "buy" or "sell"
+    #   - :size [Numeric] Order size
+    #   - :leverage [Integer] Leverage (optional, for logging)
+    # @return [Hash] Order response from Hyperliquid
+    # @raise [ConfigurationError] if credentials not configured
+    # @raise [HyperliquidApiError] on API errors
+    def place_order(params)
+      validate_write_configuration!
+
+      @logger.info "[HyperliquidClient] Placing order: #{params}"
+
+      result = exchange.market_order(
+        coin: params[:symbol],
+        is_buy: params[:side] == "buy",
+        size: params[:size].to_s,
+        slippage:
+      )
+
+      @logger.info "[HyperliquidClient] Order response: #{result}"
+      result
+    rescue Hyperliquid::Error => e
+      @logger.error "[HyperliquidClient] Order failed: #{e.class} - #{e.message}"
+      raise HyperliquidApiError, "Order placement failed: #{e.message}"
     end
 
-    # Cancel an order
-    # @raise [WriteOperationNotImplemented]
-    def cancel_order(_coin, _order_id)
-      raise WriteOperationNotImplemented,
-            "Order cancellation requires EIP-712 signing. " \
-            "See docs/HYPERLIQUID_GEM_WRITE_OPERATIONS_SPEC.md for implementation guide."
+    # Cancel an order on Hyperliquid
+    # @param coin [String] Asset symbol (e.g., "BTC")
+    # @param order_id [Integer] Order ID to cancel
+    # @return [Hash] Cancel response from Hyperliquid
+    # @raise [ConfigurationError] if credentials not configured
+    # @raise [HyperliquidApiError] on API errors
+    def cancel_order(coin, order_id)
+      validate_write_configuration!
+
+      @logger.info "[HyperliquidClient] Cancelling order #{order_id} for #{coin}"
+
+      result = exchange.cancel(coin: coin, oid: order_id)
+
+      @logger.info "[HyperliquidClient] Cancel response: #{result}"
+      result
+    rescue Hyperliquid::Error => e
+      @logger.error "[HyperliquidClient] Cancel failed: #{e.class} - #{e.message}"
+      raise HyperliquidApiError, "Order cancellation failed: #{e.message}"
     end
 
     # Update leverage for an asset
-    # @raise [WriteOperationNotImplemented]
-    def update_leverage(_coin, _leverage)
-      raise WriteOperationNotImplemented,
-            "Leverage updates require EIP-712 signing. " \
-            "See docs/HYPERLIQUID_GEM_WRITE_OPERATIONS_SPEC.md for implementation guide."
+    # @param coin [String] Asset symbol (e.g., "BTC")
+    # @param leverage [Integer] New leverage value
+    # @return [Hash] Response (placeholder - not yet implemented in gem)
+    # @note This method is a placeholder. Leverage is typically set at account level.
+    def update_leverage(coin, leverage)
+      @logger.warn "[HyperliquidClient] update_leverage called for #{coin} with leverage #{leverage}"
+      @logger.warn "[HyperliquidClient] Note: Leverage update may need to be done via Hyperliquid UI or account settings"
+
+      # The gem may not have this method yet - return informational response
+      { status: "info", message: "Leverage is typically set at account level on Hyperliquid" }
     end
 
     # === Helpers ===
@@ -159,18 +193,71 @@ module Execution
 
     private
 
-    def client
-      @client ||= Hyperliquid::Client.new(testnet: testnet?)
+    # Initialize SDK with private key for write operations
+    # @return [Hyperliquid::SDK]
+    def sdk
+      @sdk ||= Hyperliquid::SDK.new(testnet: testnet?, private_key:)
     end
 
+    # Info API client for read operations
+    # @return [Hyperliquid::Info]
+    def info
+      sdk.info
+    end
+
+    # Exchange API client for write operations
+    # @return [Hyperliquid::Exchange, nil] nil if private_key not configured
+    def exchange
+      sdk.exchange
+    end
+
+    # Get private key from environment
+    # @return [String, nil]
     def private_key
-      Rails.application.credentials.dig(:hyperliquid, :private_key)
+      ENV.fetch("HYPERLIQUID_PRIVATE_KEY", nil)
     end
 
+    # Get wallet address from environment
+    # @return [String, nil]
     def wallet_address
-      Rails.application.credentials.dig(:hyperliquid, :address)
+      ENV.fetch("HYPERLIQUID_ADDRESS", nil)
     end
 
+    # Get slippage from settings (default 0.5%)
+    # @return [Float]
+    def slippage
+      Settings.hyperliquid.slippage || 0.005
+    end
+
+    # Validate that write operations can be performed
+    # @raise [ConfigurationError] if private key not configured
+    # @raise [ConfigurationError] if exchange not available
+    # @raise [ConfigurationError] if derived address doesn't match expected address
+    def validate_write_configuration!
+      unless private_key.present?
+        raise ConfigurationError, "HYPERLIQUID_PRIVATE_KEY not configured. Add it to .env file."
+      end
+
+      unless exchange.present?
+        raise ConfigurationError, "Exchange client not available. Ensure private key is valid."
+      end
+
+      # Safety check: verify derived address matches expected address
+      derived_address = exchange.address.downcase
+      expected_address = wallet_address&.downcase
+
+      if expected_address.present? && derived_address != expected_address
+        @logger.error "[HyperliquidClient] Address mismatch! Derived: #{derived_address}, Expected: #{expected_address}"
+        raise ConfigurationError,
+              "Private key derives wrong address. " \
+              "Expected: #{expected_address}, Got: #{derived_address}. " \
+              "Check HYPERLIQUID_PRIVATE_KEY matches HYPERLIQUID_ADDRESS."
+      end
+    end
+
+    # Wrap API calls with error handling
+    # @yield Block to execute
+    # @raise [HyperliquidApiError] on API errors
     def with_error_handling
       yield
     rescue Faraday::Error => e

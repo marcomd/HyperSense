@@ -10,9 +10,25 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2025_12_23_100002) do
+ActiveRecord::Schema[8.1].define(version: 2026_01_02_165238) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
+
+  create_table "account_balances", force: :cascade do |t|
+    t.decimal "balance", precision: 20, scale: 8, null: false
+    t.datetime "created_at", null: false
+    t.decimal "delta", precision: 20, scale: 8
+    t.string "event_type", null: false
+    t.jsonb "hyperliquid_data", default: {}
+    t.text "notes"
+    t.decimal "previous_balance", precision: 20, scale: 8
+    t.datetime "recorded_at", null: false
+    t.string "source", default: "hyperliquid"
+    t.datetime "updated_at", null: false
+    t.index ["event_type", "recorded_at"], name: "index_account_balances_on_event_type_and_recorded_at"
+    t.index ["event_type"], name: "index_account_balances_on_event_type"
+    t.index ["recorded_at"], name: "index_account_balances_on_recorded_at"
+  end
 
   create_table "execution_logs", force: :cascade do |t|
     t.string "action", null: false
@@ -32,11 +48,30 @@ ActiveRecord::Schema[8.1].define(version: 2025_12_23_100002) do
     t.index ["status"], name: "index_execution_logs_on_status"
   end
 
+  create_table "forecasts", force: :cascade do |t|
+    t.decimal "actual_price", precision: 20, scale: 8
+    t.datetime "created_at", null: false
+    t.decimal "current_price", precision: 20, scale: 8, null: false
+    t.datetime "forecast_for", null: false
+    t.decimal "mae", precision: 10, scale: 6
+    t.decimal "mape", precision: 10, scale: 4
+    t.decimal "predicted_price", precision: 20, scale: 8, null: false
+    t.string "symbol", null: false
+    t.string "timeframe", null: false
+    t.datetime "updated_at", null: false
+    t.index ["forecast_for"], name: "index_forecasts_on_forecast_for"
+    t.index ["symbol", "timeframe", "forecast_for"], name: "index_forecasts_on_symbol_and_timeframe_and_forecast_for", unique: true
+    t.index ["symbol", "timeframe"], name: "index_forecasts_on_symbol_and_timeframe"
+    t.index ["symbol"], name: "index_forecasts_on_symbol"
+    t.index ["timeframe"], name: "index_forecasts_on_timeframe"
+  end
+
   create_table "macro_strategies", force: :cascade do |t|
     t.string "bias", null: false
     t.jsonb "context_used", default: {}
     t.datetime "created_at", null: false
     t.jsonb "key_levels", default: {}
+    t.string "llm_model"
     t.jsonb "llm_response", default: {}
     t.text "market_narrative", null: false
     t.decimal "risk_tolerance", precision: 3, scale: 2, null: false
@@ -92,6 +127,7 @@ ActiveRecord::Schema[8.1].define(version: 2025_12_23_100002) do
   end
 
   create_table "positions", force: :cascade do |t|
+    t.string "close_reason"
     t.datetime "closed_at"
     t.datetime "created_at", null: false
     t.decimal "current_price", precision: 20, scale: 8
@@ -102,9 +138,13 @@ ActiveRecord::Schema[8.1].define(version: 2025_12_23_100002) do
     t.decimal "liquidation_price", precision: 20, scale: 8
     t.decimal "margin_used", precision: 20, scale: 8
     t.datetime "opened_at", null: false
+    t.decimal "realized_pnl", precision: 20, scale: 8, default: "0.0"
+    t.decimal "risk_amount", precision: 20, scale: 8
     t.decimal "size", precision: 20, scale: 8, null: false
     t.string "status", default: "open", null: false
+    t.decimal "stop_loss_price", precision: 20, scale: 8
     t.string "symbol", null: false
+    t.decimal "take_profit_price", precision: 20, scale: 8
     t.decimal "unrealized_pnl", precision: 20, scale: 8, default: "0.0"
     t.datetime "updated_at", null: false
     t.index ["direction"], name: "index_positions_on_direction"
@@ -115,24 +155,29 @@ ActiveRecord::Schema[8.1].define(version: 2025_12_23_100002) do
   end
 
   create_table "trading_decisions", force: :cascade do |t|
+    t.decimal "atr_value", precision: 20, scale: 8
     t.decimal "confidence", precision: 3, scale: 2
     t.jsonb "context_sent", default: {}
     t.datetime "created_at", null: false
     t.string "direction"
     t.boolean "executed", default: false
+    t.string "llm_model"
     t.jsonb "llm_response", default: {}
     t.bigint "macro_strategy_id"
+    t.integer "next_cycle_interval", default: 12
     t.string "operation"
     t.jsonb "parsed_decision", default: {}
     t.string "rejection_reason"
     t.string "status", default: "pending"
     t.string "symbol", null: false
     t.datetime "updated_at", null: false
+    t.integer "volatility_level", default: 2
     t.index ["created_at"], name: "index_trading_decisions_on_created_at"
     t.index ["macro_strategy_id"], name: "index_trading_decisions_on_macro_strategy_id"
     t.index ["status"], name: "index_trading_decisions_on_status"
     t.index ["symbol", "created_at"], name: "index_trading_decisions_on_symbol_and_created_at"
     t.index ["symbol"], name: "index_trading_decisions_on_symbol"
+    t.index ["volatility_level"], name: "index_trading_decisions_on_volatility_level"
   end
 
   add_foreign_key "orders", "positions"

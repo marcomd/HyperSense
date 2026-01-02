@@ -9,25 +9,37 @@
 #
 # Table name: trading_decisions
 #
-#  id                :bigint           not null, primary key
-#  macro_strategy_id :bigint
-#  symbol            :string           not null
-#  context_sent      :jsonb            default({})
-#  llm_response      :jsonb            default({})
-#  parsed_decision   :jsonb            default({})
-#  operation         :string           (open/close/hold)
-#  direction         :string           (long/short)
-#  confidence        :decimal(3, 2)    (0.00 - 1.00)
-#  executed          :boolean          default(FALSE)
-#  rejection_reason  :string
-#  status            :string           default("pending")
-#  created_at        :datetime         not null
-#  updated_at        :datetime         not null
+#  id                   :bigint           not null, primary key
+#  macro_strategy_id    :bigint
+#  symbol               :string           not null
+#  context_sent         :jsonb            default({})
+#  llm_response         :jsonb            default({})
+#  parsed_decision      :jsonb            default({})
+#  operation            :string           (open/close/hold)
+#  direction            :string           (long/short)
+#  confidence           :decimal(3, 2)    (0.00 - 1.00)
+#  executed             :boolean          default(FALSE)
+#  rejection_reason     :string
+#  status               :string           default("pending")
+#  volatility_level     :integer          default(2)  (0=very_high, 1=high, 2=medium, 3=low)
+#  atr_value            :decimal(20, 8)
+#  next_cycle_interval  :integer          default(12) (minutes)
+#  created_at           :datetime         not null
+#  updated_at           :datetime         not null
 #
 class TradingDecision < ApplicationRecord
   VALID_STATUSES = %w[pending approved rejected executed failed].freeze
   VALID_OPERATIONS = %w[open close hold].freeze
   VALID_DIRECTIONS = %w[long short].freeze
+
+  # Volatility levels for dynamic job scheduling
+  # Maps to Indicators::VolatilityClassifier levels
+  enum :volatility_level, {
+    very_high: 0,
+    high: 1,
+    medium: 2,
+    low: 3
+  }, prefix: :volatility
 
   # Associations
   belongs_to :macro_strategy, optional: true
@@ -40,6 +52,10 @@ class TradingDecision < ApplicationRecord
   validates :confidence, numericality: {
     greater_than_or_equal_to: 0,
     less_than_or_equal_to: 1
+  }, allow_nil: true
+  validates :next_cycle_interval, numericality: {
+    greater_than: 0,
+    less_than_or_equal_to: 30
   }, allow_nil: true
 
   # Scopes
@@ -99,25 +115,25 @@ class TradingDecision < ApplicationRecord
   # Extract leverage from parsed_decision
   # @return [Integer, nil]
   def leverage
-    parsed_decision["leverage"]
+    parsed_decision["leverage"]&.to_i
   end
 
   # Extract target_position from parsed_decision
   # @return [Float, nil]
   def target_position
-    parsed_decision["target_position"]
+    parsed_decision["target_position"]&.to_f
   end
 
   # Extract stop_loss from parsed_decision
   # @return [Float, nil]
   def stop_loss
-    parsed_decision["stop_loss"]
+    parsed_decision["stop_loss"]&.to_f
   end
 
   # Extract take_profit from parsed_decision
   # @return [Float, nil]
   def take_profit
-    parsed_decision["take_profit"]
+    parsed_decision["take_profit"]&.to_f
   end
 
   # Extract reasoning from parsed_decision

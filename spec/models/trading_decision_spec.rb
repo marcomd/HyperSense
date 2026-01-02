@@ -75,6 +75,45 @@ RSpec.describe TradingDecision do
       decision = build(:trading_decision, confidence: 0.78)
       expect(decision).to be_valid
     end
+
+    it "requires next_cycle_interval between 1 and 30 if present" do
+      decision = build(:trading_decision, next_cycle_interval: 0)
+      expect(decision).not_to be_valid
+
+      decision = build(:trading_decision, next_cycle_interval: 31)
+      expect(decision).not_to be_valid
+
+      decision = build(:trading_decision, next_cycle_interval: 12)
+      expect(decision).to be_valid
+    end
+  end
+
+  describe "volatility_level enum" do
+    it "has valid volatility levels" do
+      %i[very_high high medium low].each do |level|
+        decision = build(:trading_decision, volatility_level: level)
+        expect(decision).to be_valid
+      end
+    end
+
+    it "defaults to medium" do
+      decision = TradingDecision.new(symbol: "BTC", status: "pending")
+      expect(decision.volatility_level).to eq("medium")
+    end
+
+    it "provides scoped query methods with volatility_ prefix" do
+      create(:trading_decision, volatility_level: :very_high)
+      create(:trading_decision, volatility_level: :medium)
+
+      expect(TradingDecision.volatility_very_high.count).to eq(1)
+      expect(TradingDecision.volatility_medium.count).to eq(1)
+    end
+
+    it "provides predicate methods with volatility_ prefix" do
+      decision = build(:trading_decision, volatility_level: :high)
+      expect(decision.volatility_high?).to be true
+      expect(decision.volatility_low?).to be false
+    end
   end
 
   describe "scopes" do
@@ -246,6 +285,47 @@ RSpec.describe TradingDecision do
 
       it "#reasoning returns the reasoning from parsed_decision" do
         expect(decision.reasoning).to eq("Strong setup")
+      end
+    end
+
+    describe "parsed_decision accessors with string values (LLM JSON)" do
+      # LLM responses often return numeric values as strings in JSON
+      let(:decision) do
+        build(:trading_decision, parsed_decision: {
+          "leverage" => "5",
+          "target_position" => "0.02",
+          "stop_loss" => "95000",
+          "take_profit" => "105000.50",
+          "reasoning" => "Strong setup"
+        })
+      end
+
+      it "#leverage converts string to integer" do
+        expect(decision.leverage).to eq(5)
+        expect(decision.leverage).to be_a(Integer)
+      end
+
+      it "#target_position converts string to float" do
+        expect(decision.target_position).to eq(0.02)
+        expect(decision.target_position).to be_a(Float)
+      end
+
+      it "#stop_loss converts string to float" do
+        expect(decision.stop_loss).to eq(95_000.0)
+        expect(decision.stop_loss).to be_a(Float)
+      end
+
+      it "#take_profit converts string to float" do
+        expect(decision.take_profit).to eq(105_000.50)
+        expect(decision.take_profit).to be_a(Float)
+      end
+
+      it "returns nil for missing values without raising errors" do
+        empty_decision = build(:trading_decision, parsed_decision: {})
+        expect(empty_decision.leverage).to be_nil
+        expect(empty_decision.target_position).to be_nil
+        expect(empty_decision.stop_loss).to be_nil
+        expect(empty_decision.take_profit).to be_nil
       end
     end
   end

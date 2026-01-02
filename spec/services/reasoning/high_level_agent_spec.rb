@@ -31,12 +31,8 @@ RSpec.describe Reasoning::HighLevelAgent do
       end
 
       before do
-        # Mock the Anthropic API response
-        allow_any_instance_of(Anthropic::Client).to receive_message_chain(:messages, :create).and_return(
-          OpenStruct.new(
-            content: [ OpenStruct.new(text: valid_llm_response) ]
-          )
-        )
+        # Mock the LLM Client response
+        allow_any_instance_of(LLM::Client).to receive(:chat).and_return(valid_llm_response)
       end
 
       it "creates a MacroStrategy record" do
@@ -82,17 +78,51 @@ RSpec.describe Reasoning::HighLevelAgent do
         expect(strategy.llm_response).to be_a(Hash)
         expect(strategy.llm_response).to include("raw", "parsed")
       end
+
+      it "stores the llm_model" do
+        strategy = agent.analyze
+        expect(strategy.llm_model).to be_present
+        expect(strategy.llm_model).to eq(Settings.llm.send(Settings.llm.provider).model)
+      end
+
+      it "expires previous non-stale strategies" do
+        old_strategy = create(:macro_strategy, valid_until: 12.hours.from_now)
+        expect(old_strategy.stale?).to be false
+
+        new_strategy = agent.analyze
+
+        old_strategy.reload
+        expect(old_strategy.stale?).to be true
+        expect(new_strategy.stale?).to be false
+      end
+
+      it "does not affect already stale strategies" do
+        stale_strategy = create(:macro_strategy, :stale)
+        original_valid_until = stale_strategy.valid_until
+
+        agent.analyze
+
+        stale_strategy.reload
+        expect(stale_strategy.valid_until).to eq(original_valid_until)
+      end
+
+      it "expires multiple previous strategies" do
+        old_strategies = create_list(:macro_strategy, 3, valid_until: 12.hours.from_now)
+
+        agent.analyze
+
+        old_strategies.each do |strategy|
+          strategy.reload
+          expect(strategy.stale?).to be true
+        end
+      end
     end
 
     context "with invalid LLM response" do
       let(:invalid_llm_response) { "{ invalid json" }
 
       before do
-        allow_any_instance_of(Anthropic::Client).to receive_message_chain(:messages, :create).and_return(
-          OpenStruct.new(
-            content: [ OpenStruct.new(text: invalid_llm_response) ]
-          )
-        )
+        allow_any_instance_of(LLM::Client).to receive(:chat).and_return(invalid_llm_response)
       end
 
       it "creates a fallback neutral strategy" do
@@ -111,12 +141,27 @@ RSpec.describe Reasoning::HighLevelAgent do
         strategy = agent.analyze
         expect(strategy.llm_response).to include("errors")
       end
+
+      it "stores the llm_model even on invalid response" do
+        strategy = agent.analyze
+        expect(strategy.llm_model).to be_present
+      end
+
+      it "expires previous non-stale strategies even with fallback" do
+        old_strategy = create(:macro_strategy, valid_until: 12.hours.from_now)
+        expect(old_strategy.stale?).to be false
+
+        agent.analyze
+
+        old_strategy.reload
+        expect(old_strategy.stale?).to be true
+      end
     end
 
     context "with API connection error" do
       before do
-        allow_any_instance_of(Anthropic::Client).to receive_message_chain(:messages, :create).and_raise(
-          Faraday::ConnectionFailed.new("Connection failed")
+        allow_any_instance_of(LLM::Client).to receive(:chat).and_raise(
+          LLM::Errors::APIError.new("Connection failed")
         )
       end
 
@@ -132,23 +177,19 @@ RSpec.describe Reasoning::HighLevelAgent do
 
     context "with empty LLM response" do
       before do
-        allow_any_instance_of(Anthropic::Client).to receive_message_chain(:messages, :create).and_return(
-          OpenStruct.new(content: [ OpenStruct.new(text: nil) ])
+        allow_any_instance_of(LLM::Client).to receive(:chat).and_raise(
+          LLM::Errors::InvalidResponseError.new("Empty response from LLM")
         )
       end
 
       it "raises an error for empty response" do
         # Empty responses should trigger the standard error handling and raise
-        expect { agent.analyze }.to raise_error(RuntimeError, /Empty response/)
+        expect { agent.analyze }.to raise_error(LLM::Errors::InvalidResponseError, /Empty response/)
       end
     end
   end
 
   describe "LLM configuration" do
-    it "reads model from settings" do
-      expect(described_class.model).to eq(Settings.llm.model)
-    end
-
     it "reads max tokens from settings" do
       expect(described_class.max_tokens).to eq(Settings.llm.high_level.max_tokens)
       expect(described_class.max_tokens).to be > 0

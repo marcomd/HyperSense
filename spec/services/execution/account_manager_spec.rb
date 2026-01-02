@@ -56,13 +56,9 @@ RSpec.describe Execution::AccountManager do
       expect(result[:available_margin]).to eq(8_000.0)
     end
 
-    it "creates an execution log on success" do
+    it "does not create execution log on successful read" do
       expect { manager.fetch_account_state }
-        .to change { ExecutionLog.count }.by(1)
-
-      log = ExecutionLog.last
-      expect(log.action).to eq("sync_account")
-      expect(log.status).to eq("success")
+        .not_to change { ExecutionLog.count }
     end
 
     context "when API fails" do
@@ -114,31 +110,54 @@ RSpec.describe Execution::AccountManager do
   end
 
   describe "#can_trade?" do
-    before do
-      allow(mock_client).to receive(:user_state).and_return({
-        "crossMarginSummary" => {
-          "accountValue" => "10000.0",
-          "totalMarginUsed" => "2000.0",
-          "totalRawUsd" => "8000.0"
-        },
-        "assetPositions" => []
-      })
+    context "when Hyperliquid credentials are not configured" do
+      before do
+        allow(mock_client).to receive(:configured?).and_return(false)
+      end
+
+      it "raises ConfigurationError with clear message" do
+        expect { manager.can_trade?(margin_required: 1000) }
+          .to raise_error(
+            Execution::HyperliquidClient::ConfigurationError,
+            /Hyperliquid credentials not configured/
+          )
+      end
+
+      it "includes setup instructions in error message" do
+        expect { manager.can_trade?(margin_required: 1000) }
+          .to raise_error(Execution::HyperliquidClient::ConfigurationError) do |error|
+            expect(error.message).to include(".env")
+          end
+      end
     end
 
-    it "returns true when margin is available" do
-      expect(manager.can_trade?(margin_required: 1000)).to be true
-    end
+    context "when Hyperliquid is configured" do
+      before do
+        allow(mock_client).to receive(:user_state).and_return({
+          "crossMarginSummary" => {
+            "accountValue" => "10000.0",
+            "totalMarginUsed" => "2000.0",
+            "totalRawUsd" => "8000.0"
+          },
+          "assetPositions" => []
+        })
+      end
 
-    it "returns false when insufficient margin" do
-      expect(manager.can_trade?(margin_required: 9000)).to be false
-    end
+      it "returns true when margin is available" do
+        expect(manager.can_trade?(margin_required: 1000)).to be true
+      end
 
-    it "checks position limits" do
-      create_list(:position, 5, status: "open")
+      it "returns false when insufficient margin" do
+        expect(manager.can_trade?(margin_required: 9000)).to be false
+      end
 
-      allow(Settings.risk).to receive(:max_open_positions).and_return(5)
+      it "checks position limits" do
+        create_list(:position, 5, status: "open")
 
-      expect(manager.can_trade?(margin_required: 100)).to be false
+        allow(Settings.risk).to receive(:max_open_positions).and_return(5)
+
+        expect(manager.can_trade?(margin_required: 100)).to be false
+      end
     end
   end
 

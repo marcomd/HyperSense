@@ -3,7 +3,8 @@ source "https://rubygems.org"
 # Bundle edge Rails instead: gem "rails", github: "rails/rails", branch: "main"
 gem "rails", "~> 8.1.1"
 # Use postgresql as the database for Active Record
-gem "pg", "~> 1.1"
+# Pin to 1.5.x due to segfault bugs in 1.6.x on macOS ARM64 with Ruby 3.4
+gem "pg", "~> 1.5.0"
 # Use the Puma web server [https://github.com/puma/puma]
 gem "puma", ">= 5.0"
 
@@ -37,19 +38,21 @@ gem "thruster", require: false
 gem "rack-cors"
 
 # HyperSense Core Dependencies
-gem "anthropic"              # Official Anthropic LLM SDK
+gem "ruby_llm"               # LLM-agnostic SDK (Anthropic, Gemini, Ollama, etc.)
 gem "faraday"                # HTTP client for API calls
 gem "oj"                     # Fast JSON parsing
 gem "feedjira"               # RSS feed parsing
 gem "eth"                    # Ethereum utilities (EIP-712 signing for Hyperliquid)
 gem "config"                 # Settings management (config/settings.yml)
 gem "dry-validation"         # Input validation
+gem "prophet-rb"             # Time series forecasting (Meta Prophet)
 
 # Hyperliquid DEX client (forked for write operations)
 gem "hyperliquid", github: "marcomd/hyperliquid", branch: "feature/add-eip-712-signing-and-exchange-operations"
 
-# Solid Queue Web UI (disabled for API-only mode - enable when adding admin UI)
-# gem "mission_control-jobs"
+# Solid Queue Web UI - dashboard for monitoring background jobs
+gem "mission_control-jobs"
+gem "propshaft"  # Asset pipeline required for Mission Control UI
 
 group :development, :test do
   # See https://guides.rubyonrails.org/debugging_rails_applications.html#debugging-with-the-debug-gem

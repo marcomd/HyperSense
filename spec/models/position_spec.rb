@@ -86,6 +86,49 @@ RSpec.describe Position do
       position = build(:position, leverage: 10)
       expect(position).to be_valid
     end
+
+    it "validates close_reason when present" do
+      %w[sl_triggered tp_triggered manual signal liquidated].each do |valid_reason|
+        position = build(:position, :closed, close_reason: valid_reason)
+        expect(position).to be_valid
+      end
+
+      position = build(:position, :closed, close_reason: "invalid_reason")
+      expect(position).not_to be_valid
+      expect(position.errors[:close_reason]).to include("is not included in the list")
+    end
+
+    it "allows nil close_reason" do
+      position = build(:position, close_reason: nil)
+      expect(position).to be_valid
+    end
+
+    it "validates stop_loss_price is positive when present" do
+      position = build(:position, stop_loss_price: -100)
+      expect(position).not_to be_valid
+
+      position = build(:position, stop_loss_price: 95_000)
+      expect(position).to be_valid
+    end
+
+    it "validates take_profit_price is positive when present" do
+      position = build(:position, take_profit_price: -100)
+      expect(position).not_to be_valid
+
+      position = build(:position, take_profit_price: 105_000)
+      expect(position).to be_valid
+    end
+
+    it "validates risk_amount is non-negative when present" do
+      position = build(:position, risk_amount: -100)
+      expect(position).not_to be_valid
+
+      position = build(:position, risk_amount: 0)
+      expect(position).to be_valid
+
+      position = build(:position, risk_amount: 500)
+      expect(position).to be_valid
+    end
   end
 
   describe "scopes" do
@@ -148,7 +191,7 @@ RSpec.describe Position do
   describe "state transitions" do
     describe "#close!" do
       it "sets status to closed and records closed_at" do
-        position = create(:position, status: "open")
+        position = create(:position, status: "open", unrealized_pnl: 100)
 
         freeze_time do
           position.close!
@@ -156,7 +199,28 @@ RSpec.describe Position do
 
           expect(position.status).to eq("closed")
           expect(position.closed_at).to eq(Time.current)
+          expect(position.close_reason).to eq("manual")
+          expect(position.realized_pnl).to eq(100)
         end
+      end
+
+      it "accepts custom close_reason and pnl" do
+        position = create(:position, status: "open", unrealized_pnl: 100)
+
+        position.close!(reason: "sl_triggered", pnl: -50)
+        position.reload
+
+        expect(position.close_reason).to eq("sl_triggered")
+        expect(position.realized_pnl).to eq(-50)
+      end
+
+      it "uses unrealized_pnl when pnl not specified" do
+        position = create(:position, status: "open", unrealized_pnl: 250)
+
+        position.close!(reason: "tp_triggered")
+        position.reload
+
+        expect(position.realized_pnl).to eq(250)
       end
     end
 
@@ -273,6 +337,228 @@ RSpec.describe Position do
         position.reload
 
         expect(position.unrealized_pnl).to eq(500) # 0.1 * (100000 - 95000)
+      end
+    end
+  end
+
+  describe "risk management" do
+    describe "#has_stop_loss?" do
+      it "returns true when stop_loss_price is set" do
+        position = build(:position, stop_loss_price: 95_000)
+        expect(position.has_stop_loss?).to be true
+      end
+
+      it "returns false when stop_loss_price is nil" do
+        position = build(:position, stop_loss_price: nil)
+        expect(position.has_stop_loss?).to be false
+      end
+    end
+
+    describe "#has_take_profit?" do
+      it "returns true when take_profit_price is set" do
+        position = build(:position, take_profit_price: 110_000)
+        expect(position.has_take_profit?).to be true
+      end
+
+      it "returns false when take_profit_price is nil" do
+        position = build(:position, take_profit_price: nil)
+        expect(position.has_take_profit?).to be false
+      end
+    end
+
+    describe "#stop_loss_triggered?" do
+      context "for long positions" do
+        it "returns true when price <= stop_loss" do
+          position = build(:position, direction: "long", stop_loss_price: 95_000, current_price: 94_000)
+          expect(position.stop_loss_triggered?).to be true
+        end
+
+        it "returns true when price == stop_loss" do
+          position = build(:position, direction: "long", stop_loss_price: 95_000, current_price: 95_000)
+          expect(position.stop_loss_triggered?).to be true
+        end
+
+        it "returns false when price > stop_loss" do
+          position = build(:position, direction: "long", stop_loss_price: 95_000, current_price: 96_000)
+          expect(position.stop_loss_triggered?).to be false
+        end
+      end
+
+      context "for short positions" do
+        it "returns true when price >= stop_loss" do
+          position = build(:position, :short, stop_loss_price: 105_000, current_price: 106_000)
+          expect(position.stop_loss_triggered?).to be true
+        end
+
+        it "returns false when price < stop_loss" do
+          position = build(:position, :short, stop_loss_price: 105_000, current_price: 104_000)
+          expect(position.stop_loss_triggered?).to be false
+        end
+      end
+
+      it "returns false when stop_loss_price is nil" do
+        position = build(:position, stop_loss_price: nil)
+        expect(position.stop_loss_triggered?).to be false
+      end
+
+      it "accepts custom price parameter" do
+        position = build(:position, direction: "long", stop_loss_price: 95_000, current_price: 100_000)
+        expect(position.stop_loss_triggered?(94_000)).to be true
+        expect(position.stop_loss_triggered?(96_000)).to be false
+      end
+    end
+
+    describe "#take_profit_triggered?" do
+      context "for long positions" do
+        it "returns true when price >= take_profit" do
+          position = build(:position, direction: "long", take_profit_price: 110_000, current_price: 111_000)
+          expect(position.take_profit_triggered?).to be true
+        end
+
+        it "returns false when price < take_profit" do
+          position = build(:position, direction: "long", take_profit_price: 110_000, current_price: 109_000)
+          expect(position.take_profit_triggered?).to be false
+        end
+      end
+
+      context "for short positions" do
+        it "returns true when price <= take_profit" do
+          position = build(:position, :short, take_profit_price: 90_000, current_price: 89_000)
+          expect(position.take_profit_triggered?).to be true
+        end
+
+        it "returns false when price > take_profit" do
+          position = build(:position, :short, take_profit_price: 90_000, current_price: 91_000)
+          expect(position.take_profit_triggered?).to be false
+        end
+      end
+
+      it "returns false when take_profit_price is nil" do
+        position = build(:position, take_profit_price: nil)
+        expect(position.take_profit_triggered?).to be false
+      end
+    end
+
+    describe "#risk_reward_ratio" do
+      it "calculates R/R ratio correctly for long position" do
+        # Entry: 100k, SL: 95k (risk: 5k), TP: 115k (reward: 15k) => R/R = 3.0
+        position = build(:position, direction: "long", entry_price: 100_000, stop_loss_price: 95_000, take_profit_price: 115_000)
+        expect(position.risk_reward_ratio).to eq(3.0)
+      end
+
+      it "calculates R/R ratio correctly for short position" do
+        # Entry: 100k, SL: 105k (risk: 5k), TP: 90k (reward: 10k) => R/R = 2.0
+        position = build(:position, :short, entry_price: 100_000, stop_loss_price: 105_000, take_profit_price: 90_000)
+        expect(position.risk_reward_ratio).to eq(2.0)
+      end
+
+      it "returns nil when stop_loss_price is missing" do
+        position = build(:position, stop_loss_price: nil, take_profit_price: 110_000)
+        expect(position.risk_reward_ratio).to be_nil
+      end
+
+      it "returns nil when take_profit_price is missing" do
+        position = build(:position, stop_loss_price: 95_000, take_profit_price: nil)
+        expect(position.risk_reward_ratio).to be_nil
+      end
+    end
+
+    describe "#stop_loss_distance_pct" do
+      it "calculates distance for long position" do
+        # Current: 100k, SL: 95k => 5% buffer
+        position = build(:position, direction: "long", current_price: 100_000, stop_loss_price: 95_000)
+        expect(position.stop_loss_distance_pct).to eq(5.0)
+      end
+
+      it "calculates distance for short position" do
+        # Current: 100k, SL: 105k => 5% buffer
+        position = build(:position, :short, current_price: 100_000, stop_loss_price: 105_000)
+        expect(position.stop_loss_distance_pct).to eq(5.0)
+      end
+
+      it "returns nil when stop_loss_price is nil" do
+        position = build(:position, stop_loss_price: nil)
+        expect(position.stop_loss_distance_pct).to be_nil
+      end
+    end
+
+    describe "#take_profit_distance_pct" do
+      it "calculates distance for long position" do
+        # Current: 100k, TP: 110k => 10% to target
+        position = build(:position, direction: "long", current_price: 100_000, take_profit_price: 110_000)
+        expect(position.take_profit_distance_pct).to eq(10.0)
+      end
+
+      it "calculates distance for short position" do
+        # Current: 100k, TP: 90k => 10% to target
+        position = build(:position, :short, current_price: 100_000, take_profit_price: 90_000)
+        expect(position.take_profit_distance_pct).to eq(10.0)
+      end
+
+      it "returns nil when take_profit_price is nil" do
+        position = build(:position, take_profit_price: nil)
+        expect(position.take_profit_distance_pct).to be_nil
+      end
+    end
+  end
+
+  describe "trading fees" do
+    describe "#entry_fee" do
+      it "calculates entry fee based on notional value" do
+        # Notional = 100,000 * 0.1 = 10,000
+        # Fee = 10,000 * 0.00045 = 4.5
+        position = build(:position, entry_price: 100_000, size: 0.1)
+        expect(position.entry_fee).to be_within(0.001).of(4.5)
+      end
+    end
+
+    describe "#exit_fee" do
+      it "estimates exit fee for open positions using current price" do
+        position = build(:position, entry_price: 100_000, current_price: 105_000, size: 0.1)
+        # Exit notional = 105,000 * 0.1 = 10,500
+        # Fee = 10,500 * 0.00045 = 4.725
+        expect(position.exit_fee).to be_within(0.001).of(4.725)
+      end
+
+      it "calculates actual exit fee for closed positions" do
+        position = build(:position, :closed, entry_price: 100_000, current_price: 110_000, size: 0.1)
+        # Exit notional = 110,000 * 0.1 = 11,000
+        # Fee = 11,000 * 0.00045 = 4.95
+        expect(position.exit_fee).to be_within(0.001).of(4.95)
+      end
+    end
+
+    describe "#total_fees" do
+      it "returns sum of entry and exit fees" do
+        position = build(:position, entry_price: 100_000, current_price: 100_000, size: 0.1)
+        expect(position.total_fees).to be_within(0.01).of(9.0)
+      end
+    end
+
+    describe "#net_pnl" do
+      it "returns gross P&L minus trading fees for open positions" do
+        # Gross PnL = 0.1 * (105,000 - 100,000) = 500
+        # Fees = ~9.225 (entry + estimated exit)
+        # Net = 500 - 9.225 = ~490.78
+        position = build(:position, entry_price: 100_000, current_price: 105_000, size: 0.1, unrealized_pnl: 500)
+        expect(position.net_pnl).to be_within(0.5).of(490.5)
+      end
+
+      it "returns gross P&L minus trading fees for closed positions" do
+        # Realized PnL = 500
+        # Fees = ~9.45 (entry + exit at 110k)
+        # Net = 500 - 9.45 = ~490.55
+        position = build(:position, :closed, entry_price: 100_000, current_price: 110_000, size: 0.1, realized_pnl: 500)
+        expect(position.net_pnl).to be_within(0.5).of(490.5)
+      end
+    end
+
+    describe "#fee_breakdown" do
+      it "returns detailed fee information" do
+        position = build(:position, entry_price: 100_000, size: 0.1)
+        breakdown = position.fee_breakdown
+
+        expect(breakdown).to include(:entry_fee, :exit_fee, :total_fee, :fee_rate, :estimated)
       end
     end
   end

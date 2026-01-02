@@ -2,12 +2,31 @@
 
 # Stores point-in-time market data for each tracked asset
 #
+# Each snapshot captures price, volume, technical indicators, and sentiment
+# at a specific moment. Created every minute by MarketSnapshotJob.
+#
 # Used for:
 # - Providing context to the reasoning engine
 # - Historical analysis and backtesting
 # - Dashboard visualization
+# - Technical indicator calculation (EMA, RSI, MACD, Pivots)
+#
+# @example Get latest snapshot for BTC
+#   snapshot = MarketSnapshot.latest_for("BTC")
+#   snapshot.price        # => 97000.0
+#   snapshot.rsi_signal   # => :neutral
 #
 class MarketSnapshot < ApplicationRecord
+  # RSI threshold constants for overbought/oversold signals
+  RSI_OVERSOLD_THRESHOLD = 30
+  RSI_OVERBOUGHT_THRESHOLD = 70
+
+  # ATR threshold constants for volatility classification (as % of price)
+  # These thresholds align with dynamic scheduling in TradingCycleJob
+  ATR_LOW_THRESHOLD = 1.0
+  ATR_HIGH_THRESHOLD = 2.0
+  ATR_VERY_HIGH_THRESHOLD = 3.0
+
   # Validations
   validates :symbol, presence: true
   validates :price, presence: true, numericality: { greater_than: 0 }
@@ -46,12 +65,23 @@ class MarketSnapshot < ApplicationRecord
 
   # Instance methods
 
-  # Get a specific indicator value
+  # Get a specific indicator value from the JSONB indicators column
+  #
+  # @param name [String, Symbol] Indicator name (e.g., "rsi_14", "ema_50")
+  # @return [Numeric, Hash, nil] Indicator value or nil if not present
+  # @example
+  #   snapshot.indicator("rsi_14")  # => 62.5
+  #   snapshot.indicator("macd")    # => { "macd" => 2.5, "signal" => 1.8, "histogram" => 0.7 }
   def indicator(name)
     indicators&.dig(name.to_s)
   end
 
-  # Check if price is above EMA
+  # Check if current price is above a specific EMA
+  #
+  # @param period [Integer] EMA period (20, 50, or 100)
+  # @return [Boolean, nil] true if price > EMA, false if below, nil if EMA unavailable
+  # @example
+  #   snapshot.above_ema?(50)  # => true
   def above_ema?(period)
     ema_value = indicator("ema_#{period}")
     return nil unless ema_value
@@ -59,19 +89,27 @@ class MarketSnapshot < ApplicationRecord
     price > ema_value
   end
 
-  # Get RSI classification
+  # Get RSI classification based on standard overbought/oversold levels
+  #
+  # @return [Symbol, nil] :oversold (RSI < 30), :overbought (RSI > 70), :neutral, or nil
+  # @example
+  #   snapshot.rsi_signal  # => :neutral
   def rsi_signal
     rsi = indicator("rsi_14")
     return nil unless rsi
 
     case rsi
-    when 0..30 then :oversold
-    when 70..100 then :overbought
+    when 0..RSI_OVERSOLD_THRESHOLD then :oversold
+    when RSI_OVERBOUGHT_THRESHOLD..100 then :overbought
     else :neutral
     end
   end
 
-  # Get MACD signal
+  # Get MACD signal based on histogram direction
+  #
+  # @return [Symbol, nil] :bullish (positive histogram), :bearish (negative), or nil
+  # @example
+  #   snapshot.macd_signal  # => :bullish
   def macd_signal
     macd_data = indicator("macd")
     return nil unless macd_data
@@ -80,5 +118,30 @@ class MarketSnapshot < ApplicationRecord
     return nil unless histogram
 
     histogram.positive? ? :bullish : :bearish
+  end
+
+  # Get ATR volatility classification based on ATR as percentage of price
+  #
+  # ATR (Average True Range) measures market volatility. This method converts
+  # the absolute ATR value to a percentage of the current price for
+  # cross-asset comparison, then classifies into 4 volatility bands.
+  #
+  # @return [Symbol, nil] :low_volatility (< 1%), :normal_volatility (1-2%),
+  #   :high_volatility (2-3%), :very_high_volatility (>= 3%), or nil if unavailable
+  # @example
+  #   snapshot.atr_signal  # => :normal_volatility
+  def atr_signal
+    atr = indicator("atr_14")
+    return nil unless atr && price.positive?
+
+    # Calculate ATR as percentage of current price
+    atr_percent = (atr / price.to_f) * 100
+
+    case atr_percent
+    when 0...ATR_LOW_THRESHOLD then :low_volatility
+    when ATR_LOW_THRESHOLD...ATR_HIGH_THRESHOLD then :normal_volatility
+    when ATR_HIGH_THRESHOLD...ATR_VERY_HIGH_THRESHOLD then :high_volatility
+    else :very_high_volatility
+    end
   end
 end

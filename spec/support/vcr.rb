@@ -7,13 +7,20 @@ VCR.configure do |config|
   config.hook_into :webmock
   config.configure_rspec_metadata!
 
-  # Filter sensitive data
+  # Filter sensitive data (LLM API keys)
   config.filter_sensitive_data("<ANTHROPIC_API_KEY>") do
-    Rails.application.credentials.dig(:anthropic, :api_key)
+    Settings.llm.anthropic.api_key
+  end
+
+  config.filter_sensitive_data("<GEMINI_API_KEY>") do
+    Settings.llm.gemini.api_key
   end
 
   # Allow localhost connections for test database
   config.ignore_localhost = true
+
+  # External data sources (news, whale alerts) are stubbed in
+  # spec/support/external_services_stubs.rb by default
 
   # Default cassette options
   config.default_cassette_options = {

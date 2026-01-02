@@ -1,15 +1,17 @@
 # HyperSense Recurring Jobs Configuration
 #
-# Trading cycle runs every 5 minutes (adjustable: 3-15 min)
-# Macro strategy refreshes daily
+# DYNAMIC SCHEDULING:
+# - TradingCycleJob and ForecastJob are now self-scheduling based on market volatility
+# - They are NOT in this file - they are bootstrapped via BootstrapTradingCycleJob
+# - Intervals: Very High (3 min), High (6 min), Medium (12 min), Low (25 min)
+#
+# FIXED SCHEDULING:
+# - MacroStrategyJob: Daily at 6am (sets market bias)
+# - MarketSnapshotJob: Every minute (data collection)
+# - RiskMonitoringJob: Every minute (SL/TP enforcement)
+# - BootstrapTradingCycleJob: Every 30 min (safety net to restart trading chain)
 
 default: &default
-  # Main trading cycle - runs frequently for market analysis and execution
-  trading_cycle:
-    class: TradingCycleJob
-    queue: trading
-    schedule: every 5 minutes
-
   # Macro strategy analysis - runs daily to set high-level direction
   macro_strategy:
     class: MacroStrategyJob
@@ -21,6 +23,19 @@ default: &default
     class: MarketSnapshotJob
     queue: data
     schedule: every minute
+
+  # Risk monitoring - enforces SL/TP and monitors circuit breaker
+  risk_monitoring:
+    class: RiskMonitoringJob
+    queue: risk
+    schedule: every minute
+
+  # Bootstrap job - ensures trading cycle chain is running
+  # Safety net that runs every 30 minutes to restart chain if broken
+  bootstrap_trading_cycle:
+    class: BootstrapTradingCycleJob
+    queue: trading
+    schedule: every 30 minutes
 
 development:
   <<: *default

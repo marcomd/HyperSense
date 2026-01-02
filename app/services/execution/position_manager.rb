@@ -19,10 +19,20 @@ module Execution
     # Creates new positions, updates existing, closes orphaned
     # @return [Hash] Sync results
     def sync_from_hyperliquid
-      @logger.info "[PositionManager] Syncing positions from Hyperliquid..."
+      @logger.info "[PositionManager] Syncing positions from Hyperliquid " \
+                   "(testnet: #{@client.testnet?}, address: #{@client.address})..."
 
       response = @client.user_state(@client.address)
+
+      # Log account state for debugging
+      summary = response["crossMarginSummary"] || {}
+      @logger.info "[PositionManager] Account state - " \
+                   "Value: #{summary['accountValue']}, " \
+                   "Margin used: #{summary['totalMarginUsed']}, " \
+                   "Available: #{summary['totalRawUsd']}"
+
       hl_positions = response["assetPositions"] || []
+      @logger.info "[PositionManager] Found #{hl_positions.count} positions on exchange"
 
       synced_symbols = []
       results = { created: 0, updated: 0, closed: 0 }
@@ -32,9 +42,23 @@ module Execution
         next unless pos_data
 
         symbol = pos_data["coin"]
+        next unless symbol # Skip if no symbol
+
+        # Validate entry price is present (required field)
+        entry_px = pos_data["entryPx"]
+        if entry_px.nil?
+          @logger.warn "[PositionManager] Skipping position - missing entryPx for #{symbol}"
+          next
+        end
+
+        size = pos_data["szi"]&.to_d || 0
+        if size.zero?
+          @logger.warn "[PositionManager] Skipping position - zero size for #{symbol}"
+          next
+        end
+
         synced_symbols << symbol
 
-        size = pos_data["szi"].to_d
         direction = size.positive? ? "long" : "short"
         size = size.abs
 
@@ -49,7 +73,7 @@ module Execution
         position.assign_attributes(
           direction: direction,
           size: size,
-          entry_price: pos_data["entryPx"].to_d,
+          entry_price: entry_px.to_d,
           current_price: pos_data["markPx"]&.to_d,
           unrealized_pnl: pos_data["unrealizedPnl"]&.to_d || 0,
           liquidation_price: pos_data["liquidationPx"]&.to_d,
@@ -92,8 +116,12 @@ module Execution
     # @param size [Numeric] Position size
     # @param entry_price [Numeric] Entry price
     # @param leverage [Integer] Leverage
+    # @param stop_loss_price [Numeric, nil] Stop-loss price
+    # @param take_profit_price [Numeric, nil] Take-profit price
+    # @param risk_amount [Numeric, nil] Dollar amount at risk
     # @return [Position]
-    def open_position(symbol:, direction:, size:, entry_price:, leverage: nil)
+    def open_position(symbol:, direction:, size:, entry_price:, leverage: nil,
+                      stop_loss_price: nil, take_profit_price: nil, risk_amount: nil)
       leverage ||= Settings.risk.default_leverage
       margin_used = (size * entry_price) / leverage
 
@@ -107,7 +135,10 @@ module Execution
         margin_used: margin_used,
         unrealized_pnl: 0,
         status: "open",
-        opened_at: Time.current
+        opened_at: Time.current,
+        stop_loss_price: stop_loss_price,
+        take_profit_price: take_profit_price,
+        risk_amount: risk_amount
       )
     end
 
@@ -154,6 +185,12 @@ module Execution
     # @return [ActiveRecord::Relation<Position>]
     def open_positions
       Position.open.recent
+    end
+
+    # Count of open positions
+    # @return [Integer]
+    def open_positions_count
+      Position.open.count
     end
 
     private

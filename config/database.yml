@@ -1,85 +1,162 @@
-# PostgreSQL. Versions 9.3 and up are supported.
+# PostgreSQL configuration for HyperSense
+# Multi-database setup: primary, cache, queue, cable
 #
-# Install the pg driver:
-#   gem install pg
-# On macOS with Homebrew:
-#   gem install pg -- --with-pg-config=/opt/homebrew/bin/pg_config
-# On Windows:
-#   gem install pg
-#       Choose the win32 build.
-#       Install PostgreSQL and put its /bin directory on your path.
-#
-# Configure Using Gemfile
-# gem "pg"
-#
+# Priority order for connection settings:
+# 1. DATABASE_URL / DATABASE_*_URL (full connection string)
+# 2. Individual env vars (DATABASE_HOST, DATABASE_PORT, etc.)
+# 3. Default values (for local Docker development)
+
 default: &default
   adapter: postgresql
   encoding: unicode
-  # For details on connection pooling, see Rails configuration guide
-  # https://guides.rubyonrails.org/configuring.html#database-pooling
-  max_connections: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
-
+  pool: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
+  # Disable GSSAPI encryption to prevent segfaults on macOS ARM64 with pg gem
+  # See: https://github.com/ged/ruby-pg/issues/538
+  gssencmode: disable
 
 development:
-  <<: *default
-  database: hypersense_development
-  username: hypersense
-  password: hypersense_dev
-  host: 127.0.0.1
-  port: 5433
-
-# Warning: The database defined as "test" will be erased and
-# re-generated from your development database when you run "rake".
-# Do not set this db to the same as development or production.
-test:
-  <<: *default
-  database: hypersense_test
-  username: hypersense
-  password: hypersense_dev
-  host: 127.0.0.1
-  port: 5433
-
-# As with config/credentials.yml, you never want to store sensitive information,
-# like your database password, in your source code. If your source code is
-# ever seen by anyone, they now have access to your database.
-#
-# Instead, provide the password or a full connection URL as an environment
-# variable when you boot the app. For example:
-#
-#   DATABASE_URL="postgres://myuser:mypass@localhost/somedatabase"
-#
-# If the connection URL is provided in the special DATABASE_URL environment
-# variable, Rails will automatically merge its configuration values on top of
-# the values provided in this file. Alternatively, you can specify a connection
-# URL environment variable explicitly:
-#
-#   production:
-#     url: <%= ENV["MY_APP_DATABASE_URL"] %>
-#
-# Connection URLs for non-primary databases can also be configured using
-# environment variables. The variable name is formed by concatenating the
-# connection name with `_DATABASE_URL`. For example:
-#
-#   CACHE_DATABASE_URL="postgres://cacheuser:cachepass@localhost/cachedatabase"
-#
-# Read https://guides.rubyonrails.org/configuring.html#configuring-a-database
-# for a full overview on how database connection configuration can be specified.
-#
-production:
-  primary: &primary_production
+  primary:
     <<: *default
-    database: backend_production
-    username: backend
-    password: <%= ENV["BACKEND_DATABASE_PASSWORD"] %>
+<% if ENV["DATABASE_URL"] %>
+    url: <%= ENV["DATABASE_URL"] %>
+<% else %>
+    host: <%= ENV.fetch("DATABASE_HOST", "localhost") %>
+    port: <%= ENV.fetch("DATABASE_PORT", "5433") %>
+    database: <%= ENV.fetch("DATABASE_DATABASE", "hypersense_development") %>
+    username: <%= ENV.fetch("DATABASE_USER", "hypersense") %>
+    password: <%= ENV.fetch("DATABASE_PASSWORD", "hypersense_dev") %>
+<% end %>
   cache:
-    <<: *primary_production
-    database: backend_production_cache
+    <<: *default
+<% if ENV["DATABASE_CACHE_URL"] %>
+    url: <%= ENV["DATABASE_CACHE_URL"] %>
+<% else %>
+    host: <%= ENV.fetch("DATABASE_HOST", "localhost") %>
+    port: <%= ENV.fetch("DATABASE_PORT", "5433") %>
+    database: <%= ENV.fetch("DATABASE_CACHE_DATABASE", "hypersense_development_cache") %>
+    username: <%= ENV.fetch("DATABASE_USER", "hypersense") %>
+    password: <%= ENV.fetch("DATABASE_PASSWORD", "hypersense_dev") %>
+<% end %>
     migrations_paths: db/cache_migrate
   queue:
-    <<: *primary_production
-    database: backend_production_queue
+    <<: *default
+<% if ENV["DATABASE_QUEUE_URL"] %>
+    url: <%= ENV["DATABASE_QUEUE_URL"] %>
+<% else %>
+    host: <%= ENV.fetch("DATABASE_HOST", "localhost") %>
+    port: <%= ENV.fetch("DATABASE_PORT", "5433") %>
+    database: <%= ENV.fetch("DATABASE_QUEUE_DATABASE", "hypersense_development_queue") %>
+    username: <%= ENV.fetch("DATABASE_USER", "hypersense") %>
+    password: <%= ENV.fetch("DATABASE_PASSWORD", "hypersense_dev") %>
+<% end %>
     migrations_paths: db/queue_migrate
   cable:
-    <<: *primary_production
-    database: backend_production_cable
+    <<: *default
+<% if ENV["DATABASE_CABLE_URL"] %>
+    url: <%= ENV["DATABASE_CABLE_URL"] %>
+<% else %>
+    host: <%= ENV.fetch("DATABASE_HOST", "localhost") %>
+    port: <%= ENV.fetch("DATABASE_PORT", "5433") %>
+    database: <%= ENV.fetch("DATABASE_CABLE_DATABASE", "hypersense_development_cable") %>
+    username: <%= ENV.fetch("DATABASE_USER", "hypersense") %>
+    password: <%= ENV.fetch("DATABASE_PASSWORD", "hypersense_dev") %>
+<% end %>
+    migrations_paths: db/cable_migrate
+
+test:
+  primary:
+    <<: *default
+<% if ENV["DATABASE_TEST_URL"] %>
+    url: <%= ENV["DATABASE_TEST_URL"] %>
+<% else %>
+    host: <%= ENV.fetch("DATABASE_HOST", "localhost") %>
+    port: <%= ENV.fetch("DATABASE_PORT", "5433") %>
+    database: <%= ENV.fetch("DATABASE_TEST_DATABASE", "hypersense_test") %>
+    username: <%= ENV.fetch("DATABASE_USER", "hypersense") %>
+    password: <%= ENV.fetch("DATABASE_PASSWORD", "hypersense_dev") %>
+<% end %>
+  cache:
+    <<: *default
+<% if ENV["DATABASE_TEST_CACHE_URL"] %>
+    url: <%= ENV["DATABASE_TEST_CACHE_URL"] %>
+<% else %>
+    host: <%= ENV.fetch("DATABASE_HOST", "localhost") %>
+    port: <%= ENV.fetch("DATABASE_PORT", "5433") %>
+    database: <%= ENV.fetch("DATABASE_TEST_CACHE_DATABASE", "hypersense_test_cache") %>
+    username: <%= ENV.fetch("DATABASE_USER", "hypersense") %>
+    password: <%= ENV.fetch("DATABASE_PASSWORD", "hypersense_dev") %>
+<% end %>
+    migrations_paths: db/cache_migrate
+  queue:
+    <<: *default
+<% if ENV["DATABASE_TEST_QUEUE_URL"] %>
+    url: <%= ENV["DATABASE_TEST_QUEUE_URL"] %>
+<% else %>
+    host: <%= ENV.fetch("DATABASE_HOST", "localhost") %>
+    port: <%= ENV.fetch("DATABASE_PORT", "5433") %>
+    database: <%= ENV.fetch("DATABASE_TEST_QUEUE_DATABASE", "hypersense_test_queue") %>
+    username: <%= ENV.fetch("DATABASE_USER", "hypersense") %>
+    password: <%= ENV.fetch("DATABASE_PASSWORD", "hypersense_dev") %>
+<% end %>
+    migrations_paths: db/queue_migrate
+  cable:
+    <<: *default
+<% if ENV["DATABASE_TEST_CABLE_URL"] %>
+    url: <%= ENV["DATABASE_TEST_CABLE_URL"] %>
+<% else %>
+    host: <%= ENV.fetch("DATABASE_HOST", "localhost") %>
+    port: <%= ENV.fetch("DATABASE_PORT", "5433") %>
+    database: <%= ENV.fetch("DATABASE_TEST_CABLE_DATABASE", "hypersense_test_cable") %>
+    username: <%= ENV.fetch("DATABASE_USER", "hypersense") %>
+    password: <%= ENV.fetch("DATABASE_PASSWORD", "hypersense_dev") %>
+<% end %>
+    migrations_paths: db/cable_migrate
+
+production:
+  primary:
+    <<: *default
+<% if ENV["DATABASE_URL"] %>
+    url: <%= ENV["DATABASE_URL"] %>
+<% else %>
+    host: <%= ENV.fetch("DATABASE_HOST") %>
+    port: <%= ENV.fetch("DATABASE_PORT", "5432") %>
+    database: <%= ENV.fetch("DATABASE_DATABASE", "hypersense_production") %>
+    username: <%= ENV.fetch("DATABASE_USER") %>
+    password: <%= ENV.fetch("DATABASE_PASSWORD") %>
+<% end %>
+  cache:
+    <<: *default
+<% if ENV["DATABASE_CACHE_URL"] %>
+    url: <%= ENV["DATABASE_CACHE_URL"] %>
+<% else %>
+    host: <%= ENV.fetch("DATABASE_HOST") %>
+    port: <%= ENV.fetch("DATABASE_PORT", "5432") %>
+    database: <%= ENV.fetch("DATABASE_CACHE_DATABASE", "hypersense_production_cache") %>
+    username: <%= ENV.fetch("DATABASE_USER") %>
+    password: <%= ENV.fetch("DATABASE_PASSWORD") %>
+<% end %>
+    migrations_paths: db/cache_migrate
+  queue:
+    <<: *default
+<% if ENV["DATABASE_QUEUE_URL"] %>
+    url: <%= ENV["DATABASE_QUEUE_URL"] %>
+<% else %>
+    host: <%= ENV.fetch("DATABASE_HOST") %>
+    port: <%= ENV.fetch("DATABASE_PORT", "5432") %>
+    database: <%= ENV.fetch("DATABASE_QUEUE_DATABASE", "hypersense_production_queue") %>
+    username: <%= ENV.fetch("DATABASE_USER") %>
+    password: <%= ENV.fetch("DATABASE_PASSWORD") %>
+<% end %>
+    migrations_paths: db/queue_migrate
+  cable:
+    <<: *default
+<% if ENV["DATABASE_CABLE_URL"] %>
+    url: <%= ENV["DATABASE_CABLE_URL"] %>
+<% else %>
+    host: <%= ENV.fetch("DATABASE_HOST") %>
+    port: <%= ENV.fetch("DATABASE_PORT", "5432") %>
+    database: <%= ENV.fetch("DATABASE_CABLE_DATABASE", "hypersense_production_cable") %>
+    username: <%= ENV.fetch("DATABASE_USER") %>
+    password: <%= ENV.fetch("DATABASE_PASSWORD") %>
+<% end %>
     migrations_paths: db/cable_migrate
