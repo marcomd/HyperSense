@@ -2,6 +2,25 @@
 
 All notable changes to HyperSense.
 
+## [0.28.0] - 2026-01-02
+
+### Added
+- **Tunnel Configuration via Environment Variables** - Configurable remote access for development
+  - `BACKEND_TUNNEL_HOST` - Hostname for Rails host authorization (e.g., `your-tunnel.ngrok-free.app`)
+  - `FRONTEND_TUNNEL_URL` - Full URL for CORS and ActionCable origins (e.g., `https://your-tunnel.pinggy.link`)
+  - Updated `.env.example` with tunnel configuration section
+
+### Changed
+- **Dynamic Host Authorization** - `config.hosts` now reads from `BACKEND_TUNNEL_HOST` env variable
+- **Dynamic CORS Origins** - `cors.rb` now uses `FRONTEND_TUNNEL_URL` for allowed origins
+- **Dynamic ActionCable Origins** - `allowed_request_origins` reads from `FRONTEND_TUNNEL_URL`
+
+### Technical Details
+- `config/environments/development.rb` - Conditionally adds tunnel hosts from ENV
+- `config/initializers/cors.rb` - Uses `FRONTEND_TUNNEL_URL` or `FRONTEND_URL` for origins
+
+### Supports Frontend (0.12.0)
+
 ## [0.27.0] - 2026-01-01
 
 ### Changed

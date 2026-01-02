@@ -6,8 +6,8 @@
 # Read more: https://github.com/cyu/rack-cors
 
 Rails.application.config.middleware.insert_before 0, Rack::Cors do
+  # Development: Allow React dev server
   allow do
-    # Development: Allow React dev server
     origins "localhost:3000", "localhost:5173", "127.0.0.1:3000", "127.0.0.1:5173"
 
     resource "*",
@@ -16,10 +16,12 @@ Rails.application.config.middleware.insert_before 0, Rack::Cors do
       credentials: true
   end
 
-  # Production: Configure via environment variable
-  if ENV["FRONTEND_URL"].present?
+  # Tunnel/Production: Configure via environment variable
+  # FRONTEND_TUNNEL_URL for development tunnels, FRONTEND_URL for production
+  frontend_origin = ENV["FRONTEND_TUNNEL_URL"] || ENV["FRONTEND_URL"]
+  if frontend_origin.present?
     allow do
-      origins ENV["FRONTEND_URL"]
+      origins frontend_origin
 
       resource "*",
         headers: :any,
