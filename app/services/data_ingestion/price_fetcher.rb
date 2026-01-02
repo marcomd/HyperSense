@@ -80,11 +80,7 @@ module DataIngestion
     #
     def fetch_klines(asset, interval: "1h", limit: 100)
       symbol = SYMBOL_MAP[asset] || "#{asset}USDT"
-      response = @conn.get("/api/v3/klines", {
-        symbol: symbol,
-        interval: interval,
-        limit: limit
-      })
+      response = @conn.get("/api/v3/klines", { symbol:, interval:, limit: })
 
       raise "API Error: #{response.status}" unless response.success?
 
@@ -109,7 +105,7 @@ module DataIngestion
     # @return [Array<Float>] Array of closing prices (oldest first)
     #
     def fetch_prices_for_indicators(asset, interval: "1h", limit: 150)
-      klines = fetch_klines(asset, interval: interval, limit: limit)
+      klines = fetch_klines(asset, interval:, limit:)
       klines.map { |k| k[:close] }
     end
   end

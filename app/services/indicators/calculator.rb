@@ -172,22 +172,23 @@ module Indicators
 
     # Calculate all indicators for an asset in a single call
     #
-    # Convenience method that computes EMA (20, 50, 100), RSI (14),
+    # Convenience method that computes EMA (20, 50, 100, 200), RSI (14),
     # MACD, pivot points, and optionally ATR.
     #
     # @param prices [Array<Numeric>] Price history (oldest first)
     # @param high [Numeric, nil] Period high (for pivot points)
     # @param low [Numeric, nil] Period low (for pivot points)
     # @param candles [Array<Hash>, nil] OHLCV candle data (for ATR calculation)
-    # @return [Hash] All calculated indicators with keys :ema_20, :ema_50, :ema_100, :rsi_14, :macd, :pivot_points, :atr_14
+    # @return [Hash] All calculated indicators with keys :ema_20, :ema_50, :ema_100, :ema_200, :rsi_14, :macd, :pivot_points, :atr_14
     # @example
     #   calculator.calculate_all(prices, high: 105, low: 95, candles: candles)
-    #   # => { ema_20: 102.5, ema_50: 100.0, ema_100: 98.5, rsi_14: 55.0, macd: {...}, pivot_points: {...}, atr_14: 5.2 }
+    #   # => { ema_20: 102.5, ema_50: 100.0, ema_100: 98.5, ema_200: 97.0, rsi_14: 55.0, macd: {...}, pivot_points: {...}, atr_14: 5.2 }
     def calculate_all(prices, high: nil, low: nil, candles: nil)
       {
         ema_20: ema(prices, 20),
         ema_50: ema(prices, 50),
         ema_100: ema(prices, 100),
+        ema_200: ema(prices, 200),
         rsi_14: rsi(prices, 14),
         macd: macd(prices),
         pivot_points: high && low ? pivot_points(high, low, prices.last) : nil,

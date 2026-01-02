@@ -204,6 +204,7 @@ module Reasoning
           - MACD Signal: #{asset.dig(:technical_indicators, :signals, :macd)}
           - ATR(14): #{format_atr(asset)}
           - Above EMA-50: #{asset.dig(:technical_indicators, :signals, :above_ema_50)}
+          - Above EMA-200: #{asset.dig(:technical_indicators, :signals, :above_ema_200)} (long-term trend)
         ASSET
       end.join("\n")
     end

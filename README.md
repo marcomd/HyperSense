@@ -1,6 +1,6 @@
 # HyperSense
 
-**Version 0.32.0** | Autonomous AI Trading Agent for cryptocurrency markets.
+**Version 0.33.1** | Autonomous AI Trading Agent for cryptocurrency markets.
 
 ![HyperSense_cover1.jpg](docs/HyperSense_cover1.jpg)
 
@@ -433,6 +433,7 @@ calculator = Indicators::Calculator.new
 calculator.ema(prices, 20)   # EMA-20
 calculator.ema(prices, 50)   # EMA-50
 calculator.ema(prices, 100)  # EMA-100
+calculator.ema(prices, 200)  # EMA-200 (long-term trend, bull/bear market structure)
 
 # RSI (Relative Strength Index)
 calculator.rsi(prices, 14)   # 0-100, oversold < 30, overbought > 70
@@ -515,7 +516,7 @@ context = assembler.for_trading(macro_strategy: MacroStrategy.active)
 # Includes: forecast, news, whale_alerts, market_data, technical_indicators, sentiment
 
 # Technical indicators include:
-# - EMA (20, 50, 100), RSI, MACD, Pivot Points
+# - EMA (20, 50, 100, 200), RSI, MACD, Pivot Points
 # - ATR with volatility classification (low/normal/high/very_high)
 
 # LLM system prompt instructs to weight inputs accordingly:

@@ -121,7 +121,7 @@ RSpec.describe TradingCycleJob, type: :job do
 
       decision_hold.reload
       expect(decision_hold.volatility_level).to eq("medium")
-      expect(decision_hold.atr_value).to eq(1.5)
+      expect(decision_hold.atr_value).to eq(0.015)
       expect(decision_hold.next_cycle_interval).to eq(12)
     end
 

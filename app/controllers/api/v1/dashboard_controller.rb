@@ -161,6 +161,7 @@ module Api
               rsi_signal: snapshot.rsi_signal,
               macd_signal: snapshot.macd_signal,
               above_ema_50: snapshot.above_ema?(50),
+              above_ema_200: snapshot.above_ema?(200),
               forecast_direction: forecast&.direction,
               forecast_change_pct: forecast&.predicted_change_pct,
               updated_at: snapshot.captured_at.iso8601

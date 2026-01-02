@@ -202,6 +202,8 @@ module Reasoning
         Indicators:
         - EMA-20: $#{format_number(context.dig(:technical_indicators, :ema_20))}
         - EMA-50: $#{format_number(context.dig(:technical_indicators, :ema_50))}
+        - EMA-100: $#{format_number(context.dig(:technical_indicators, :ema_100))}
+        - EMA-200: $#{format_number(context.dig(:technical_indicators, :ema_200))} (long-term trend)
         - RSI(14): #{format_number(context.dig(:technical_indicators, :rsi_14))}
         - MACD: #{format_macd(context.dig(:technical_indicators, :macd))}
         - Pivot Points: #{format_pivots(context.dig(:technical_indicators, :pivot_points))}
@@ -211,6 +213,7 @@ module Reasoning
         - MACD Signal: #{context.dig(:technical_indicators, :signals, :macd)}
         - Above EMA-20: #{context.dig(:technical_indicators, :signals, :above_ema_20)}
         - Above EMA-50: #{context.dig(:technical_indicators, :signals, :above_ema_50)}
+        - Above EMA-200: #{context.dig(:technical_indicators, :signals, :above_ema_200)} (bull/bear market structure)
 
         Recent Action:
         - Trend: #{context.dig(:recent_price_action, :trend)}

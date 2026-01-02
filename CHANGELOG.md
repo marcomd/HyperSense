@@ -2,6 +2,38 @@
 
 All notable changes to HyperSense.
 
+## [0.33.1] - 2026-01-02
+
+### Fixed
+- **ATR Value Display** - Fixed incorrect ATR percentage display in Trading Decisions page
+  - Was storing raw `atr_value` instead of `atr_percentage` in TradingDecision
+  - Frontend multiplies by 100 for percentage display (e.g., 0.025 → 2.50%)
+  - Previously showed incorrect values like 131% instead of 1.31%
+
+## [0.33.0] - 2026-01-02
+
+### Added
+- **EMA 200 Indicator** - Added 200-period Exponential Moving Average for long-term trend analysis
+  - Enables Golden Cross / Death Cross detection (50 EMA crossing 200 EMA)
+  - Price above/below 200 EMA defines bull/bear market structure
+  - Displayed in MarketOverview dashboard card
+  - Available in LLM context for trading decisions
+
+### Changed
+- **Candle Fetch Limit** - Increased from 150 to 250 hourly candles in MarketSnapshotJob
+  - Ensures EMA 200 has sufficient data immediately (Binance API allows up to 1000)
+
+### Technical Details
+- Updated `Indicators::Calculator.calculate_all` to include `ema_200`
+- Updated `Reasoning::ContextAssembler` with `ema_200` and `above_ema_200` signal
+- Updated `Reasoning::HighLevelAgent` prompt to display `Above EMA-200` for each asset
+- Updated `Reasoning::LowLevelAgent` prompt to display EMA-100, EMA-200 values and signals
+- Updated `MarketDataController` and `DashboardController` API responses
+- Added `above_ema_200` to MarketOverview frontend component
+- New test coverage for EMA 200 calculation
+
+### Supports Frontend (0.15.0)
+
 ## [0.32.0] - 2026-01-02
 
 ### Added

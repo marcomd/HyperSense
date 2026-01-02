@@ -144,8 +144,10 @@ module Api
           ema_20: indicators["ema_20"]&.round(2),
           ema_50: indicators["ema_50"]&.round(2),
           ema_100: indicators["ema_100"]&.round(2),
+          ema_200: indicators["ema_200"]&.round(2),
           above_ema_20: snapshot.above_ema?(20),
-          above_ema_50: snapshot.above_ema?(50)
+          above_ema_50: snapshot.above_ema?(50),
+          above_ema_200: snapshot.above_ema?(200)
         }
 
         if detailed

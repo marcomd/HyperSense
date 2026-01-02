@@ -84,7 +84,7 @@ class TradingCycleJob < ApplicationJob
     decisions.each do |decision|
       decision.update!(
         volatility_level: volatility.level,
-        atr_value: volatility.atr_value,
+        atr_value: volatility.atr_percentage,
         next_cycle_interval: volatility.interval
       )
     end

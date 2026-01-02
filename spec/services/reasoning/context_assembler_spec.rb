@@ -16,6 +16,7 @@ RSpec.describe Reasoning::ContextAssembler do
         "ema_20" => 96_500,
         "ema_50" => 95_000,
         "ema_100" => 92_000,
+        "ema_200" => 90_000,
         "rsi_14" => 62.5,
         "atr_14" => 1_455.0,
         "macd" => { "macd" => 250.0, "signal" => 200.0, "histogram" => 50.0 },
@@ -40,6 +41,7 @@ RSpec.describe Reasoning::ContextAssembler do
         "ema_20" => 3_350,
         "ema_50" => 3_200,
         "ema_100" => 3_000,
+        "ema_200" => 2_800,
         "rsi_14" => 58.0,
         "atr_14" => 51.0,
         "macd" => { "macd" => 25.0, "signal" => 20.0, "histogram" => 5.0 },
@@ -86,10 +88,11 @@ RSpec.describe Reasoning::ContextAssembler do
         context = assembler.for_trading(macro_strategy: macro_strategy)
 
         expect(context[:technical_indicators][:ema_20]).to eq(96_500)
+        expect(context[:technical_indicators][:ema_200]).to eq(90_000)
         expect(context[:technical_indicators][:rsi_14]).to eq(62.5)
         expect(context[:technical_indicators][:atr_14]).to eq(1_455.0)
         expect(context[:technical_indicators][:macd]).to include("macd" => 250.0)
-        expect(context[:technical_indicators][:signals]).to include(:rsi, :macd, :atr)
+        expect(context[:technical_indicators][:signals]).to include(:rsi, :macd, :atr, :above_ema_200)
       end
 
       it "includes ATR volatility signal" do

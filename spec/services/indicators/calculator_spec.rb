@@ -178,7 +178,7 @@ RSpec.describe Indicators::Calculator do
   end
 
   describe "#calculate_all" do
-    let(:prices) { (1..150).map { |i| 100 + Math.sin(i * 0.1) * 5 } }
+    let(:prices) { (1..250).map { |i| 100 + Math.sin(i * 0.1) * 5 } }
 
     it "returns all indicators" do
       result = calculator.calculate_all(prices, high: 110, low: 95)
@@ -187,10 +187,25 @@ RSpec.describe Indicators::Calculator do
         :ema_20,
         :ema_50,
         :ema_100,
+        :ema_200,
         :rsi_14,
         :macd,
         :pivot_points
       )
+    end
+
+    it "calculates EMA 200 correctly" do
+      result = calculator.calculate_all(prices, high: 110, low: 95)
+
+      expect(result[:ema_200]).to be_a(Float)
+      expect(result[:ema_200]).to be_between(95, 105)
+    end
+
+    it "returns nil for EMA 200 when insufficient data" do
+      short_prices = (1..150).map { |i| 100 + Math.sin(i * 0.1) * 5 }
+      result = calculator.calculate_all(short_prices, high: 110, low: 95)
+
+      expect(result[:ema_200]).to be_nil
     end
 
     context "with candles provided" do
