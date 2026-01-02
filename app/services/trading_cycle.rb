@@ -173,6 +173,21 @@ class TradingCycle
         next false
       end
 
+      # RSI-based entry filter (code-level enforcement)
+      if decision.operation == "open"
+        snapshot = MarketSnapshot.latest_for(decision.symbol)
+        rsi = snapshot&.indicators&.dig("rsi_14")
+        if rsi
+          if decision.direction == "long" && rsi > 70
+            decision.reject!("RSI #{rsi.round(1)} overbought - cannot open long")
+            next false
+          elsif decision.direction == "short" && rsi < 30
+            decision.reject!("RSI #{rsi.round(1)} oversold - cannot open short")
+            next false
+          end
+        end
+      end
+
       # For open operations, calculate optimal position size
       if decision.operation == "open" && decision.stop_loss
         sizing = @position_sizer.optimal_size_for_decision(decision, entry_price: entry_price)

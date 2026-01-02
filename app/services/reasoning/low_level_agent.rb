@@ -28,11 +28,39 @@ module Reasoning
       - If a position EXISTS (has_position: true): You can choose "close" or "hold" (NOT "open")
 
       Decision logic:
-      - NO position + bullish signal aligned with macro bias = "open" long
-      - NO position + bearish signal aligned with macro bias = "open" short
+      - NO position + bullish TECHNICAL signals = consider "open" long
+      - NO position + bearish TECHNICAL signals = consider "open" short
       - NO position + unclear signals = "hold" (wait for better setup)
-      - HAS position + target reached OR stop-loss near OR trend reversal = "close"
-      - HAS position + trend continues in favorable direction = "hold"
+      - HAS position + CLOSE conditions met (see below) = "close"
+      - HAS position + no CLOSE conditions met = "hold"
+
+      ## Direction Independence from Macro
+      The macro bias is a SUGGESTION, not a requirement. When technical signals conflict with macro:
+      - Strong technical signals (RSI extreme + MACD divergence) OVERRIDE macro bias
+      - You CAN and SHOULD open SHORTS during bullish macro when RSI > 70 (overbought) + bearish MACD
+      - You CAN and SHOULD open LONGS during bearish macro when RSI < 30 (oversold) + bullish MACD
+      - Technical indicators are KING - they reflect actual price action
+
+      ## RSI Entry Filters (CRITICAL - check BEFORE opening)
+      - NEVER open LONG if RSI > 70 (overbought) - wait for pullback below 65
+      - NEVER open SHORT if RSI < 30 (oversold) - wait for bounce above 35
+      - When RSI is 65-70 and opening LONG, reduce confidence by 0.15
+      - When RSI is 30-35 and opening SHORT, reduce confidence by 0.15
+
+      ## CLOSE Operation Rules (CRITICAL - prevent premature exits)
+      CLOSE operation is ONLY valid when ONE of these conditions is met:
+      1. Price is within 1% of take-profit target
+      2. Price is within 1% of stop-loss level
+      3. CONFIRMED trend reversal: BOTH RSI crosses 50 level AND MACD histogram changes sign
+      4. Position has been held for at least 30 minutes AND shows clear reversal
+
+      Do NOT close due to:
+      - "Technical deterioration" alone
+      - Price moving slightly against position (that's what stop-loss is for!)
+      - Slight indicator changes without confirmed trend reversal
+      - Fear or uncertainty - let the stop-loss protect you
+
+      IMPORTANT: Let stop-loss do its job! If price moves against you but hasn't hit SL, HOLD.
 
       ## Input Weighting System
       You will receive data with assigned weights indicating their importance in your decision:
@@ -47,10 +75,11 @@ module Reasoning
       ## Decision Framework
       1. Check CURRENT POSITION STATUS first - this determines available operations
       2. Start with TECHNICAL indicators as primary direction indicator (EMA trends, RSI, MACD)
-      3. Confirm with SENTIMENT data (Fear & Greed, news)
-      4. Consider FORECAST predictions as supplementary context
-      5. Factor in WHALE_ALERTS for potential sudden moves
-      6. Set appropriate stop-loss and take-profit levels (for open operations)
+      3. Apply RSI entry filters (no longs when overbought, no shorts when oversold)
+      4. Confirm with SENTIMENT data (Fear & Greed, news)
+      5. Consider FORECAST predictions as supplementary context
+      6. Factor in WHALE_ALERTS for potential sudden moves
+      7. Set appropriate stop-loss and take-profit levels (for open operations)
 
       ## Output JSON schema for OPEN action (only when NO position exists):
       {
@@ -70,7 +99,7 @@ module Reasoning
         "operation": "close",
         "symbol": "BTC" | "ETH" | "SOL" | "BNB",
         "confidence": number (0.6 to 1.0),
-        "reasoning": "string - explanation for closing (e.g., take profit, stop loss, trend reversal)"
+        "reasoning": "string - MUST cite specific close condition met (TP near, SL near, or confirmed reversal)"
       }
 
       ## Output JSON schema for HOLD action:
@@ -85,17 +114,13 @@ module Reasoning
       - Check if a position exists FIRST before deciding on operation
       - If NO position: Only "open" or "hold" are valid operations
       - If position EXISTS: Only "close" or "hold" are valid (cannot open another position)
-      - ONLY suggest "open" if you see a clear opportunity aligned with macro bias AND no position exists
+      - ONLY suggest "open" if technical signals are clear AND RSI allows entry
       - "hold" is the default when conditions are unclear or no edge exists
-      - "close" should be used when:
-        - Take-profit target is approaching (within 2%)
-        - Stop-loss is at risk (price moving against position)
-        - Trend has reversed against the position direction
-        - Market conditions have significantly changed
+      - "close" should ONLY be used when close conditions above are met
       - Confidence < 0.6 should result in "hold"
       - Stop-loss is REQUIRED for any "open" operation
       - Respect max leverage from risk parameters
-      - Consider risk/reward ratio (aim for at least 2:1)
+      - Consider risk/reward ratio (aim for at least 1.5:1)
       - IMPORTANT: You must respond ONLY with valid JSON. No explanations outside the JSON.
     PROMPT
 

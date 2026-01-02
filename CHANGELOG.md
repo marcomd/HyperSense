@@ -2,6 +2,32 @@
 
 All notable changes to HyperSense.
 
+## [0.32.0] - 2026-01-02
+
+### Added
+- **RSI Entry Filters** - Prevent opening positions at extreme RSI levels
+  - Block long entries when RSI > 70 (overbought)
+  - Block short entries when RSI < 30 (oversold)
+  - Code-level enforcement in TradingCycle.filter_and_approve
+- **Direction Independence from Macro** - Allow shorts during bullish macro and longs during bearish macro
+  - Technical signals can override macro bias when strong (RSI extreme + MACD divergence)
+  - Enables the agent to capture both directional moves
+- **Improved Close Rules** - Prevent premature position exits
+  - Close only when: price within 1% of SL/TP, or confirmed trend reversal (RSI crosses 50 AND MACD histogram changes sign)
+  - Minimum 30-minute hold time before close (unless SL/TP triggered)
+  - Removed "technical deterioration" as valid close reason
+
+### Changed
+- **Risk/Reward Ratio** - Lowered minimum from 2.0 to 1.5 to allow more trades
+  - Updated DEFAULT_MIN_RISK_REWARD_RATIO in RiskManager
+  - Updated settings.yml default value
+
+### Technical Details
+- Updated SYSTEM_PROMPT in `Reasoning::LowLevelAgent` with new rules
+- Added RSI validation in `TradingCycle#filter_and_approve`
+- New spec file: `spec/services/trading_cycle_spec.rb`
+- Updated `spec/services/risk/risk_manager_spec.rb` for new R/R ratio
+
 ## [0.31.0] - 2026-01-02
 
 ### Added

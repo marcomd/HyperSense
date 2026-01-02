@@ -146,7 +146,7 @@ RSpec.describe Risk::RiskManager do
     context "when enforce_risk_reward_ratio is true" do
       before do
         allow(Settings.risk).to receive(:enforce_risk_reward_ratio).and_return(true)
-        allow(Settings.risk).to receive(:min_risk_reward_ratio).and_return(2.0)
+        allow(Settings.risk).to receive(:min_risk_reward_ratio).and_return(1.5)
       end
 
       it "approves when R/R ratio meets minimum" do
@@ -155,6 +155,18 @@ RSpec.describe Risk::RiskManager do
           entry_price: 100_000,
           stop_loss: 95_000,
           take_profit: 115_000,
+          direction: "long"
+        )
+        expect(result[:valid]).to be true
+      end
+
+      it "approves when R/R ratio equals minimum 1.5" do
+        # Entry: 100k, SL: 95k (risk: 5k), TP: 107.5k (reward: 7.5k) => R/R = 1.5
+        # Use floats to avoid integer division issues
+        result = risk_manager.validate_risk_reward(
+          entry_price: 100_000.0,
+          stop_loss: 95_000.0,
+          take_profit: 107_500.0,
           direction: "long"
         )
         expect(result[:valid]).to be true

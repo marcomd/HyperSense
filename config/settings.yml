@@ -41,7 +41,7 @@ risk:
   # Position Sizing
   max_risk_per_trade: 0.01       # 1% of capital at risk per trade
   # Risk/Reward Validation
-  min_risk_reward_ratio: 2.0     # Minimum R/R ratio (2:1)
+  min_risk_reward_ratio: 1.5     # Minimum R/R ratio (1.5:1) - lowered from 2.0 to allow more trades
   enforce_risk_reward_ratio: true # Reject trades below min R/R (false = warn only)
   # Circuit Breaker
   max_daily_loss: 0.05           # 5% max daily loss triggers circuit breaker

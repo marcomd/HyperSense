@@ -20,8 +20,8 @@ module Risk
   #   end
   #
   class RiskManager
-    # Default fallback for minimum risk/reward ratio
-    DEFAULT_MIN_RISK_REWARD_RATIO = 2.0
+    # Default fallback for minimum risk/reward ratio (lowered from 2.0 to allow more trades)
+    DEFAULT_MIN_RISK_REWARD_RATIO = 1.5
 
     # Result object for validation checks
     ValidationResult = Struct.new(:valid, :reason, keyword_init: true) do
