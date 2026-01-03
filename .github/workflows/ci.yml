@@ -71,6 +71,9 @@ jobs:
       DATABASE_USER: postgres
       DATABASE_PASSWORD: postgres
       DATABASE_DATABASE: hypersense_test
+      # Dummy keys for tests (actual API calls are mocked)
+      ANTHROPIC_API_KEY: test-key-for-ci
+      LLM_PROVIDER: anthropic
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
