@@ -51,7 +51,8 @@ RSpec.describe Costs::Calculator do
       before do
         macro = create(:macro_strategy)
         create(:trading_decision, macro_strategy: macro)
-        create(:position, :closed, entry_price: 100_000, current_price: 102_000, size: 0.1, closed_at: 1.hour.ago)
+        # Use a time guaranteed to be within today (30 minutes from now avoids midnight boundary issues)
+        create(:position, :closed, entry_price: 100_000, current_price: 102_000, size: 0.1, closed_at: 30.minutes.from_now)
       end
 
       it "includes trading fees from positions" do
@@ -87,12 +88,13 @@ RSpec.describe Costs::Calculator do
 
     context "with closed positions" do
       before do
+        # Use a time guaranteed to be within today (avoids midnight boundary issues)
         create(:position, :closed,
           entry_price: 100_000,
           current_price: 105_000,
           size: 0.1,
           realized_pnl: 500,
-          closed_at: 1.hour.ago
+          closed_at: 30.minutes.from_now
         )
       end
 
