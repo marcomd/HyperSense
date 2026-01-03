@@ -2,6 +2,14 @@
 
 All notable changes to HyperSense.
 
+## [0.33.6] - 2026-01-03
+
+### Added
+- **FactoryBot Environment Guard** - All 8 factory files now raise error if used outside test environment
+  - Prevents accidental test data contamination in development/production
+  - Error message: "FactoryBot should only be used in test environment!"
+  - Files protected: positions, orders, trading_decisions, macro_strategies, market_snapshots, forecasts, execution_logs, account_balances
+
 ## [0.33.5] - 2026-01-03
 
 ### Fixed

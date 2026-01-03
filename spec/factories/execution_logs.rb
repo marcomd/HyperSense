@@ -2,6 +2,8 @@
 
 FactoryBot.define do
   factory :execution_log do
+    before(:create) { raise "FactoryBot should only be used in test environment!" unless Rails.env.test? }
+
     loggable { nil }
     action { "place_order" }
     status { "success" }

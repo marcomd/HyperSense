@@ -2,6 +2,8 @@
 
 FactoryBot.define do
   factory :position do
+    before(:create) { raise "FactoryBot should only be used in test environment!" unless Rails.env.test? }
+
     symbol { "BTC" }
     direction { "long" }
     size { 0.1 }

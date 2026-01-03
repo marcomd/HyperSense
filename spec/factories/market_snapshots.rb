@@ -2,6 +2,8 @@
 
 FactoryBot.define do
   factory :market_snapshot do
+    before(:create) { raise "FactoryBot should only be used in test environment!" unless Rails.env.test? }
+
     symbol { "BTC" }
     price { 97_000 }
     high_24h { 98_500 }

@@ -2,6 +2,8 @@
 
 FactoryBot.define do
   factory :trading_decision do
+    before(:create) { raise "FactoryBot should only be used in test environment!" unless Rails.env.test? }
+
     association :macro_strategy, factory: :macro_strategy
     symbol { "BTC" }
     context_sent { { timestamp: Time.current.iso8601, symbol: "BTC" } }

@@ -2,6 +2,8 @@
 
 FactoryBot.define do
   factory :macro_strategy do
+    before(:create) { raise "FactoryBot should only be used in test environment!" unless Rails.env.test? }
+
     market_narrative { "Bitcoin showing strength above 50-day EMA with bullish momentum." }
     bias { "bullish" }
     risk_tolerance { 0.7 }

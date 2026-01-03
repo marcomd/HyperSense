@@ -2,6 +2,8 @@
 
 FactoryBot.define do
   factory :forecast do
+    before(:create) { raise "FactoryBot should only be used in test environment!" unless Rails.env.test? }
+
     symbol { "BTC" }
     timeframe { "1h" }
     current_price { 98_000.0 }

@@ -2,6 +2,8 @@
 
 FactoryBot.define do
   factory :order do
+    before(:create) { raise "FactoryBot should only be used in test environment!" unless Rails.env.test? }
+
     trading_decision { nil }
     position { nil }
     symbol { "BTC" }

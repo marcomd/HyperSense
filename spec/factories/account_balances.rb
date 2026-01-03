@@ -2,6 +2,8 @@
 
 FactoryBot.define do
   factory :account_balance do
+    before(:create) { raise "FactoryBot should only be used in test environment!" unless Rails.env.test? }
+
     balance { 10_000.0 }
     event_type { "sync" }
     source { "hyperliquid" }
