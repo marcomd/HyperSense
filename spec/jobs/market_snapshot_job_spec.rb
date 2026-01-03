@@ -31,8 +31,13 @@ RSpec.describe MarketSnapshotJob, type: :job do
       ema_100: 94000.0,
       rsi_14: 55.0,
       macd: { macd: 100.0, signal: 90.0, histogram: 10.0 },
-      pivot_points: { pp: 97000.0, r1: 98000.0, s1: 96000.0 }
+      pivot_points: { pp: 97000.0, r1: 98000.0, s1: 96000.0 },
+      atr_14: 1500.0
     }
+  end
+
+  let(:candles) do
+    (1..150).map { |i| { open: 97000.0 - i, high: 98000.0 - i, low: 96000.0 - i, close: 97000.0 } }
   end
 
   before do
@@ -41,7 +46,7 @@ RSpec.describe MarketSnapshotJob, type: :job do
     allow(Indicators::Calculator).to receive(:new).and_return(indicator_calculator)
 
     allow(price_fetcher).to receive(:fetch_ticker).and_return(ticker_data)
-    allow(price_fetcher).to receive(:fetch_prices_for_indicators).and_return([ 97000.0 ] * 150)
+    allow(price_fetcher).to receive(:fetch_klines).and_return(candles)
     allow(sentiment_fetcher).to receive(:fetch_all).and_return(sentiment_data)
     allow(indicator_calculator).to receive(:calculate_all).and_return(indicators)
 
@@ -70,6 +75,15 @@ RSpec.describe MarketSnapshotJob, type: :job do
 
     it "calculates indicators for each asset" do
       expect(indicator_calculator).to receive(:calculate_all).exactly(Settings.assets.count).times
+
+      described_class.new.perform
+    end
+
+    it "passes candles to calculate_all for ATR calculation" do
+      expect(indicator_calculator).to receive(:calculate_all).with(
+        array_including(97000.0),
+        hash_including(candles: candles)
+      ).at_least(:once)
 
       described_class.new.perform
     end

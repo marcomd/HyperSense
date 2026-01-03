@@ -10,9 +10,25 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2025_12_29_130949) do
+ActiveRecord::Schema[8.1].define(version: 2026_01_02_165238) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
+
+  create_table "account_balances", force: :cascade do |t|
+    t.decimal "balance", precision: 20, scale: 8, null: false
+    t.datetime "created_at", null: false
+    t.decimal "delta", precision: 20, scale: 8
+    t.string "event_type", null: false
+    t.jsonb "hyperliquid_data", default: {}
+    t.text "notes"
+    t.decimal "previous_balance", precision: 20, scale: 8
+    t.datetime "recorded_at", null: false
+    t.string "source", default: "hyperliquid"
+    t.datetime "updated_at", null: false
+    t.index ["event_type", "recorded_at"], name: "index_account_balances_on_event_type_and_recorded_at"
+    t.index ["event_type"], name: "index_account_balances_on_event_type"
+    t.index ["recorded_at"], name: "index_account_balances_on_recorded_at"
+  end
 
   create_table "execution_logs", force: :cascade do |t|
     t.string "action", null: false
@@ -139,6 +155,7 @@ ActiveRecord::Schema[8.1].define(version: 2025_12_29_130949) do
   end
 
   create_table "trading_decisions", force: :cascade do |t|
+    t.decimal "atr_value", precision: 20, scale: 8
     t.decimal "confidence", precision: 3, scale: 2
     t.jsonb "context_sent", default: {}
     t.datetime "created_at", null: false
@@ -147,17 +164,20 @@ ActiveRecord::Schema[8.1].define(version: 2025_12_29_130949) do
     t.string "llm_model"
     t.jsonb "llm_response", default: {}
     t.bigint "macro_strategy_id"
+    t.integer "next_cycle_interval", default: 12
     t.string "operation"
     t.jsonb "parsed_decision", default: {}
     t.string "rejection_reason"
     t.string "status", default: "pending"
     t.string "symbol", null: false
     t.datetime "updated_at", null: false
+    t.integer "volatility_level", default: 2
     t.index ["created_at"], name: "index_trading_decisions_on_created_at"
     t.index ["macro_strategy_id"], name: "index_trading_decisions_on_macro_strategy_id"
     t.index ["status"], name: "index_trading_decisions_on_status"
     t.index ["symbol", "created_at"], name: "index_trading_decisions_on_symbol_and_created_at"
     t.index ["symbol"], name: "index_trading_decisions_on_symbol"
+    t.index ["volatility_level"], name: "index_trading_decisions_on_volatility_level"
   end
 
   add_foreign_key "orders", "positions"

@@ -18,18 +18,18 @@ module Reasoning
 
       ## Input Weighting System
       You will receive data with assigned weights indicating their importance:
-      - FORECAST (weight: 0.6) - Price predictions are the PRIMARY signal for bias direction.
-      - SENTIMENT (weight: 0.2) - Market sentiment (Fear & Greed, news) provides confirmation.
-      - TECHNICAL (weight: 0.1) - Technical indicators offer supporting context.
-      - WHALE_ALERTS (weight: 0.1) - Large capital movements indicate institutional positioning.
+      - TECHNICAL (weight: 0.50) - Technical indicators are the PRIMARY signal for bias direction. These are proven and based on actual price action.
+      - SENTIMENT (weight: 0.25) - Market sentiment (Fear & Greed, news) provides confirmation or contrarian signals.
+      - FORECAST (weight: 0.15) - Price predictions offer supplementary context but use with caution in volatile markets.
+      - WHALE_ALERTS (weight: 0.10) - Large capital movements indicate institutional positioning.
 
       Weight your analysis according to these priorities. If forecast data is unavailable,
       redistribute its weight proportionally to other available sources.
 
       ## Analysis Framework
-      1. Start with FORECAST signals to determine primary bias direction
+      1. Start with TECHNICAL indicators to determine primary bias direction (EMA trends, RSI, MACD across assets)
       2. Confirm with SENTIMENT (Fear & Greed, recent news)
-      3. Validate with TECHNICAL trends across assets
+      3. Consider FORECAST predictions as supplementary context
       4. Factor in WHALE_ALERTS for institutional sentiment
       5. Set risk tolerance based on signal agreement
 
@@ -82,10 +82,10 @@ module Reasoning
       else
         handle_invalid_response(parsed[:errors], context, response)
       end
-    rescue LLM::RateLimitError => e
+    rescue LLM::Errors::RateLimitError => e
       @logger.warn "[HighLevelAgent] Rate limited: #{e.message}"
       nil
-    rescue LLM::APIError, LLM::ConfigurationError, Faraday::Error => e
+    rescue LLM::Errors::APIError, LLM::Errors::ConfigurationError, Faraday::Error => e
       @logger.error "[HighLevelAgent] API error: #{e.message}"
       nil
     rescue StandardError => e
@@ -202,9 +202,25 @@ module Reasoning
           - 24h Change: #{asset.dig(:market_data, :price_change_pct_24h)&.round(2)}%
           - RSI(14): #{asset.dig(:technical_indicators, :rsi_14)&.round(1)}
           - MACD Signal: #{asset.dig(:technical_indicators, :signals, :macd)}
+          - ATR(14): #{format_atr(asset)}
           - Above EMA-50: #{asset.dig(:technical_indicators, :signals, :above_ema_50)}
+          - Above EMA-200: #{asset.dig(:technical_indicators, :signals, :above_ema_200)} (long-term trend)
         ASSET
       end.join("\n")
+    end
+
+    # Format ATR value with volatility classification
+    #
+    # @param asset [Hash] Asset data from context assembler
+    # @return [String] Formatted ATR display (e.g., "2500.50 (high_volatility)")
+    def format_atr(asset)
+      atr_value = asset.dig(:technical_indicators, :atr_14)
+      atr_signal = asset.dig(:technical_indicators, :signals, :atr)
+
+      return "N/A" unless atr_value
+
+      signal_str = atr_signal ? " (#{atr_signal})" : ""
+      "#{atr_value.round(2)}#{signal_str}"
     end
 
     def format_historical_trends(trends)
@@ -239,15 +255,30 @@ module Reasoning
         llm_model: @client.model
       )
 
+      expire_previous_strategies(strategy.id)
+
       @logger.info "[HighLevelAgent] Created macro strategy: bias=#{strategy.bias}, risk=#{strategy.risk_tolerance}"
       strategy
+    end
+
+    # Expire all other non-stale macro strategies
+    #
+    # @param current_id [Integer] ID of the newly created strategy to exclude
+    # @return [void]
+    def expire_previous_strategies(current_id)
+      expired_count = MacroStrategy
+        .where.not(id: current_id)
+        .where("valid_until > ?", Time.current)
+        .update_all(valid_until: Time.current)
+
+      @logger.info "[HighLevelAgent] Expired #{expired_count} previous strategies" if expired_count.positive?
     end
 
     def handle_invalid_response(errors, context, raw_response)
       @logger.error "[HighLevelAgent] Invalid LLM response: #{errors.join(', ')}"
 
       # Create a fallback neutral strategy with shorter validity
-      MacroStrategy.create!(
+      strategy = MacroStrategy.create!(
         market_narrative: "Unable to parse LLM response. Defaulting to neutral stance.",
         bias: "neutral",
         risk_tolerance: 0.5,
@@ -257,6 +288,10 @@ module Reasoning
         valid_until: Time.current + 6.hours,
         llm_model: @client.model
       )
+
+      expire_previous_strategies(strategy.id)
+
+      strategy
     end
   end
 end

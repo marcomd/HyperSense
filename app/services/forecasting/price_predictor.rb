@@ -87,7 +87,7 @@ module Forecasting
     private
 
     def predict_for_timeframe(timeframe, historical_data, current_price, config)
-      return nil if historical_data.size < config[:min_data_points]
+      return if historical_data.size < config[:min_data_points]
 
       # Prepare data for Prophet (requires Rover::DataFrame with 'ds' and 'y' columns)
       prophet_data = Rover::DataFrame.new({

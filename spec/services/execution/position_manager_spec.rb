@@ -11,6 +11,7 @@ RSpec.describe Execution::PositionManager do
     allow(Execution::HyperliquidClient).to receive(:new).and_return(mock_client)
     allow(mock_client).to receive(:address).and_return(test_address)
     allow(mock_client).to receive(:configured?).and_return(true)
+    allow(mock_client).to receive(:testnet?).and_return(false)
   end
 
   describe "#sync_from_hyperliquid" do

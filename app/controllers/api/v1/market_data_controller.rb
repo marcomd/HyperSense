@@ -144,8 +144,10 @@ module Api
           ema_20: indicators["ema_20"]&.round(2),
           ema_50: indicators["ema_50"]&.round(2),
           ema_100: indicators["ema_100"]&.round(2),
+          ema_200: indicators["ema_200"]&.round(2),
           above_ema_20: snapshot.above_ema?(20),
-          above_ema_50: snapshot.above_ema?(50)
+          above_ema_50: snapshot.above_ema?(50),
+          above_ema_200: snapshot.above_ema?(200)
         }
 
         if detailed
@@ -178,7 +180,7 @@ module Api
           current_price: forecast.current_price.to_f,
           predicted_price: forecast.predicted_price.to_f,
           direction: forecast.direction,
-          change_pct: forecast.predicted_change_pct,
+          change_pct: forecast.predicted_change_pct.to_f,
           forecast_for: forecast.forecast_for.iso8601,
           created_at: forecast.created_at.iso8601
         }
@@ -192,7 +194,7 @@ module Api
           current_price: forecast.current_price.to_f,
           predicted_price: forecast.predicted_price.to_f,
           direction: forecast.direction,
-          change_pct: forecast.predicted_change_pct,
+          change_pct: forecast.predicted_change_pct.to_f,
           forecast_for: forecast.forecast_for.iso8601,
           created_at: forecast.created_at.iso8601
         }

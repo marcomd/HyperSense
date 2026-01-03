@@ -1,12 +1,10 @@
 # frozen_string_literal: true
 
-require_relative "errors"
-
 module LLM
   # LLM-agnostic client wrapper for ruby_llm
   #
   # Provides a unified interface for interacting with different LLM providers
-  # (Anthropic, Gemini, Ollama) based on the LLM_PROVIDER environment variable.
+  # (Anthropic, Gemini, Ollama, OpenAI) based on the LLM_PROVIDER environment variable.
   #
   # @example Basic usage
   #   client = LLM::Client.new(max_tokens: 1500, temperature: 0.3)
@@ -18,7 +16,7 @@ module LLM
   #
   class Client
     # Supported LLM providers
-    SUPPORTED_PROVIDERS = %w[anthropic gemini ollama].freeze
+    SUPPORTED_PROVIDERS = %w[anthropic gemini ollama openai].freeze
 
     # @return [String] The model identifier for the current provider
     attr_reader :model
@@ -37,7 +35,7 @@ module LLM
     # @param model [String, nil] Model identifier (defaults to provider-specific setting)
     # @param max_tokens [Integer, nil] Maximum response tokens (defaults to 1500)
     # @param temperature [Float, nil] Response temperature (defaults to 0.3)
-    # @raise [LLM::ConfigurationError] If provider is not supported or not configured
+    # @raise [LLM::Errors::ConfigurationError] If provider is not supported or not configured
     def initialize(model: nil, max_tokens: nil, temperature: nil)
       @provider = Settings.llm.provider.to_s
       validate_provider!
@@ -54,46 +52,48 @@ module LLM
     # @param system_prompt [String] The system/instruction prompt
     # @param user_prompt [String] The user message
     # @return [String] The assistant's response text
-    # @raise [LLM::RateLimitError] When rate limited by provider
-    # @raise [LLM::APIError] When API returns an error
-    # @raise [LLM::InvalidResponseError] When response cannot be parsed
+    # @raise [LLM::Errors::RateLimitError] When rate limited by provider
+    # @raise [LLM::Errors::APIError] When API returns an error
+    # @raise [LLM::Errors::InvalidResponseError] When response cannot be parsed
     def chat(system_prompt:, user_prompt:)
       chat_instance = build_chat(system_prompt)
       response = chat_instance.ask(user_prompt)
 
       extract_content(response)
     rescue RubyLLM::RateLimitError => e
-      raise LLM::RateLimitError.new(e.message, original_error: e)
+      raise Errors::RateLimitError.new(e.message, original_error: e)
     rescue RubyLLM::UnauthorizedError, RubyLLM::ForbiddenError => e
-      raise LLM::ConfigurationError.new("Authentication failed: #{e.message}", original_error: e)
+      raise Errors::ConfigurationError.new("Authentication failed: #{e.message}", original_error: e)
     rescue RubyLLM::BadRequestError, RubyLLM::ServerError,
            RubyLLM::ServiceUnavailableError, RubyLLM::OverloadedError => e
-      raise LLM::APIError.new(e.message, original_error: e)
+      raise Errors::APIError.new(e.message, original_error: e)
     rescue RubyLLM::Error => e
-      raise LLM::APIError.new("LLM error: #{e.message}", original_error: e)
+      raise Errors::APIError.new("LLM error: #{e.message}", original_error: e)
     end
 
     private
 
     # Validate that the provider is supported
     #
-    # @raise [LLM::ConfigurationError] If provider is not supported
+    # @raise [LLM::Errors::ConfigurationError] If provider is not supported
     def validate_provider!
       return if SUPPORTED_PROVIDERS.include?(@provider)
 
-      raise ConfigurationError, "Unsupported LLM provider: '#{@provider}'. " \
-                                "Supported: #{SUPPORTED_PROVIDERS.join(', ')}"
+      raise Errors::ConfigurationError, "Unsupported LLM provider: '#{@provider}'. " \
+                                        "Supported: #{SUPPORTED_PROVIDERS.join(', ')}"
     end
 
     # Validate provider-specific configuration
     #
-    # @raise [LLM::ConfigurationError] If required settings are missing
+    # @raise [LLM::Errors::ConfigurationError] If required settings are missing
     def validate_configuration!
       case @provider
       when "anthropic"
         validate_api_key!(Settings.llm.anthropic.api_key, "ANTHROPIC_API_KEY")
       when "gemini"
         validate_api_key!(Settings.llm.gemini.api_key, "GEMINI_API_KEY")
+      when "openai"
+        validate_api_key!(Settings.llm.openai.api_key, "OPENAI_API_KEY")
       when "ollama"
         # Ollama doesn't require an API key, just a running server
         nil
@@ -104,11 +104,11 @@ module LLM
     #
     # @param key [String, nil] The API key value
     # @param env_var [String] The environment variable name for error messages
-    # @raise [LLM::ConfigurationError] If key is blank
+    # @raise [LLM::Errors::ConfigurationError] If key is blank
     def validate_api_key!(key, env_var)
       return if key.present?
 
-      raise ConfigurationError, "#{env_var} is required for #{@provider} provider"
+      raise Errors::ConfigurationError, "#{env_var} is required for #{@provider} provider"
     end
 
     # Get the default model for the current provider
@@ -120,6 +120,8 @@ module LLM
         Settings.llm.anthropic.model
       when "gemini"
         Settings.llm.gemini.model
+      when "openai"
+        Settings.llm.openai.model
       when "ollama"
         Settings.llm.ollama.model
       end
@@ -140,6 +142,7 @@ module LLM
     #
     # Different providers use different parameter names:
     # - Anthropic: max_tokens (top level)
+    # - OpenAI: max_tokens (top level)
     # - Ollama: max_tokens (top level, OpenAI-compatible)
     # - Gemini: generationConfig.maxOutputTokens
     #
@@ -158,10 +161,10 @@ module LLM
     #
     # @param response [RubyLLM::Message] The chat response
     # @return [String] The response text
-    # @raise [LLM::InvalidResponseError] If content is empty
+    # @raise [LLM::Errors::InvalidResponseError] If content is empty
     def extract_content(response)
       content = response&.content
-      raise InvalidResponseError, "Empty response from LLM" if content.blank?
+      raise Errors::InvalidResponseError, "Empty response from LLM" if content.blank?
 
       content
     end

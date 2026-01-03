@@ -28,12 +28,11 @@ class MarketSnapshotJob < ApplicationJob
     snapshots = []
 
     assets.each do |asset|
-      snapshot = create_snapshot(
-        asset: asset,
-        price_fetcher: price_fetcher,
-        indicator_calculator: indicator_calculator,
-        sentiment: sentiment,
-        captured_at: captured_at
+      snapshot = create_snapshot(asset:,
+        price_fetcher:,
+        indicator_calculator:,
+        sentiment:,
+        captured_at:
       )
       snapshots << snapshot if snapshot
     rescue StandardError => e
@@ -62,14 +61,17 @@ class MarketSnapshotJob < ApplicationJob
     # Fetch current ticker data
     ticker = price_fetcher.fetch_ticker(asset)
 
-    # Fetch historical prices for indicators
-    prices = price_fetcher.fetch_prices_for_indicators(asset, interval: "1h", limit: 150)
+    # Fetch historical candles for indicators (OHLCV data)
+    # 250 candles ensures EMA 200 has sufficient data
+    candles = price_fetcher.fetch_klines(asset, interval: "1h", limit: 250)
+    prices = candles.map { |c| c[:close] }
 
-    # Calculate indicators
+    # Calculate indicators (including ATR from candles)
     indicators = indicator_calculator.calculate_all(
       prices,
       high: ticker[:high_24h],
-      low: ticker[:low_24h]
+      low: ticker[:low_24h],
+      candles: candles
     )
 
     # Create snapshot

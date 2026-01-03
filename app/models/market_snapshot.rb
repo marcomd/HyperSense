@@ -21,6 +21,12 @@ class MarketSnapshot < ApplicationRecord
   RSI_OVERSOLD_THRESHOLD = 30
   RSI_OVERBOUGHT_THRESHOLD = 70
 
+  # ATR threshold constants for volatility classification (as % of price)
+  # These thresholds align with dynamic scheduling in TradingCycleJob
+  ATR_LOW_THRESHOLD = 1.0
+  ATR_HIGH_THRESHOLD = 2.0
+  ATR_VERY_HIGH_THRESHOLD = 3.0
+
   # Validations
   validates :symbol, presence: true
   validates :price, presence: true, numericality: { greater_than: 0 }
@@ -112,5 +118,30 @@ class MarketSnapshot < ApplicationRecord
     return nil unless histogram
 
     histogram.positive? ? :bullish : :bearish
+  end
+
+  # Get ATR volatility classification based on ATR as percentage of price
+  #
+  # ATR (Average True Range) measures market volatility. This method converts
+  # the absolute ATR value to a percentage of the current price for
+  # cross-asset comparison, then classifies into 4 volatility bands.
+  #
+  # @return [Symbol, nil] :low_volatility (< 1%), :normal_volatility (1-2%),
+  #   :high_volatility (2-3%), :very_high_volatility (>= 3%), or nil if unavailable
+  # @example
+  #   snapshot.atr_signal  # => :normal_volatility
+  def atr_signal
+    atr = indicator("atr_14")
+    return nil unless atr && price.positive?
+
+    # Calculate ATR as percentage of current price
+    atr_percent = (atr / price.to_f) * 100
+
+    case atr_percent
+    when 0...ATR_LOW_THRESHOLD then :low_volatility
+    when ATR_LOW_THRESHOLD...ATR_HIGH_THRESHOLD then :normal_volatility
+    when ATR_HIGH_THRESHOLD...ATR_VERY_HIGH_THRESHOLD then :high_volatility
+    else :very_high_volatility
+    end
   end
 end

@@ -59,8 +59,21 @@ Rails.application.configure do
   # Annotate rendered view with file names.
   config.action_view.annotate_rendered_view_with_filenames = true
 
-  # Uncomment if you wish to allow Action Cable access from any origin.
-  # config.action_cable.disable_request_forgery_protection = true
+  # Allow requests from tunnel services (configured via ENV)
+  # BACKEND_TUNNEL_HOST: hostname of the backend tunnel (e.g., your-tunnel.ngrok-free.app)
+  # FRONTEND_TUNNEL_URL: full URL of the frontend tunnel (e.g., https://your-tunnel.pinggy.link)
+  if ENV["BACKEND_TUNNEL_HOST"].present?
+    config.hosts << ENV["BACKEND_TUNNEL_HOST"]
+  end
+
+  if ENV["FRONTEND_TUNNEL_HOST"].present?
+    config.hosts << ENV["FRONTEND_TUNNEL_HOST"]
+  end
+
+  # Allow Action Cable access from localhost and tunnel services
+  allowed_origins = [ "http://localhost:5173" ]
+  allowed_origins << ENV["FRONTEND_TUNNEL_URL"] if ENV["FRONTEND_TUNNEL_URL"].present?
+  config.action_cable.allowed_request_origins = allowed_origins
 
   # Raise error when a before_action's only/except options reference missing actions.
   config.action_controller.raise_on_missing_callback_actions = true

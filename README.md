@@ -1,6 +1,6 @@
 # HyperSense
 
-**Version 0.18.1** | Autonomous AI Trading Agent for cryptocurrency markets.
+**Version 0.33.5** | Autonomous AI Trading Agent for cryptocurrency markets.
 
 ![HyperSense_cover1.jpg](docs/HyperSense_cover1.jpg)
 
@@ -10,10 +10,11 @@ HyperSense is an autonomous trading agent that operates in discrete cycles to an
 
 ### Key Features
 
-- **Autonomous Operation**: Runs every 3-15 minutes without human intervention
+- **Autonomous Operation**: Dynamic scheduling based on market volatility (3-25 minutes)
 - **Multi-Agent Architecture**: High-level (macro strategy) + Low-level (trade execution) agents
-- **Technical Analysis**: EMA, RSI, MACD, Pivot Points
+- **Technical Analysis**: EMA, RSI, MACD, ATR (volatility), Pivot Points
 - **Risk Management**: Position sizing, stop-loss, take-profit, confidence scoring
+- **Cost Tracking**: On-the-fly calculation of trading fees, LLM costs, and server costs with net P&L
 - **Real-time Dashboard**: React frontend with routing, filters, and detail pages
 
 ## Architecture
@@ -21,7 +22,7 @@ HyperSense is an autonomous trading agent that operates in discrete cycles to an
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    ORCHESTRATOR                             │
-│              (TradingCycleJob - every 5 min)                │
+│      (TradingCycleJob - dynamic 3-25 min based on ATR)      │
 │                   Via Solid Queue                           │
 └─────────────────────────────────────────────────────────────┘
                               │
@@ -31,18 +32,18 @@ HyperSense is an autonomous trading agent that operates in discrete cycles to an
 │   HIGH-LEVEL AGENT  │                │   LOW-LEVEL AGENT   │
 │   (Macro Strategist)│                │   (Trade Executor)  │
 ├─────────────────────┤                ├─────────────────────┤
-│ Frequency: Daily    │                │ Frequency: 5 min    │
-│ (6am or on-demand)  │                │                     │
-│                     │                │ Inputs:             │
-│ Inputs:             │                │ - Current prices    │
-│ - Weekly trends     │                │ - Live indicators   │
-│ - Macro sentiment   │                │ - Macro strategy    │
-│ - News/events       │                │                     │
-│                     │                │ Outputs:            │
-│ Outputs:            │                │ - Specific trades   │
-│ - Market narrative  │                │ - Entry/exit points │
-│ - Bias direction    │                │ - Position sizing   │
-│ - Risk tolerance    │                │                     │
+│ Frequency: Daily    │                │ Frequency: 3-25 min │
+│ (6am or on-demand)  │                │ (based on ATR)      │
+│                     │                │                     │
+│ Inputs:             │                │ Inputs:             │
+│ - Weekly trends     │                │ - Current prices    │
+│ - Macro sentiment   │                │ - Live indicators   │
+│ - News/events       │                │ - Macro strategy    │
+│                     │                │                     │
+│ Outputs:            │                │ Outputs:            │
+│ - Market narrative  │                │ - Specific trades   │
+│ - Bias direction    │                │ - Entry/exit points │
+│ - Risk tolerance    │                │ - Position sizing   │
 └─────────────────────┘                └─────────────────────┘
                               │
                               ▼
@@ -75,9 +76,18 @@ HyperSense is an autonomous trading agent that operates in discrete cycles to an
 |-----------|-----|-------|---------|
 | Every minute | MarketSnapshotJob | data | Fetch prices, calculate indicators |
 | Every minute | RiskMonitoringJob | risk | Monitor SL/TP, circuit breaker |
-| Every 5 minutes | TradingCycleJob | trading | Main trading orchestration |
-| Every 5 minutes | ForecastJob | analysis | Prophet price predictions (1m, 15m, 1h) |
+| Dynamic (3-25 min) | TradingCycleJob | trading | Main trading orchestration |
+| Dynamic (n-1 min) | ForecastJob | analysis | Prophet price predictions (1m, 15m, 1h) |
 | Daily (6am) | MacroStrategyJob | analysis | High-level market analysis |
+| Every 30 minutes | BootstrapTradingCycleJob | trading | Safety net to restart trading chain |
+
+**Dynamic Scheduling**: TradingCycleJob and ForecastJob use ATR-based volatility to determine intervals:
+- Very High volatility (ATR ≥ 3%): 3 min
+- High volatility (ATR ≥ 2%): 6 min
+- Medium volatility (ATR ≥ 1%): 12 min
+- Low volatility (ATR < 1%): 25 min
+
+The **aggregated volatility** uses the highest volatility level across all assets (BTC, ETH, SOL, BNB). If any asset is "medium" while others are "low", the aggregated level is "medium". Each trading decision also stores its **per-symbol ATR percentage** for granular analysis.
 
 ### Background Jobs Dashboard
 
@@ -128,7 +138,7 @@ All day  → TradingCycleJob (5min) makes decisions within macro bias
 | Job Queue | Solid Queue | No Redis needed! |
 | Job Dashboard | Mission Control Jobs | Web UI for Solid Queue |
 | Scheduling | recurring.yml | Built into Solid Queue |
-| LLM | ruby_llm gem | Multi-provider (Anthropic, Gemini, Ollama) |
+| LLM | ruby_llm gem | Multi-provider (Anthropic, Gemini, Ollama, OpenAI) |
 | Exchange | hyperliquid gem (forked) | Extend with write ops |
 | Signing | eth gem | EIP-712 for Hyperliquid |
 | Frontend | React + Vite + TypeScript | Rich charting, React Router |
@@ -150,7 +160,8 @@ HyperSense/
 │   │   │       ├── decisions_controller.rb
 │   │   │       ├── market_data_controller.rb
 │   │   │       ├── macro_strategies_controller.rb
-│   │   │       └── execution_logs_controller.rb
+│   │   │       ├── execution_logs_controller.rb
+│   │   │       └── costs_controller.rb
 │   │   ├── jobs/                   # Solid Queue jobs
 │   │   │   ├── trading_cycle_job.rb
 │   │   │   ├── macro_strategy_job.rb
@@ -164,7 +175,8 @@ HyperSense/
 │   │   │   ├── position.rb          # Open/closed positions
 │   │   │   ├── order.rb             # Exchange orders
 │   │   │   ├── execution_log.rb     # Audit trail
-│   │   │   └── forecast.rb          # Price predictions with MAE/MAPE
+│   │   │   ├── forecast.rb          # Price predictions with MAE/MAPE
+│   │   │   └── account_balance.rb   # Balance history for PnL tracking
 │   │   └── services/
 │   │       ├── data_ingestion/
 │   │       │   ├── price_fetcher.rb      # Binance API
@@ -184,15 +196,20 @@ HyperSense/
 │   │       │   ├── high_level_agent.rb   # Macro strategy (daily)
 │   │       │   └── low_level_agent.rb    # Trade decisions (5 min)
 │   │       ├── execution/
-│   │       │   ├── hyperliquid_client.rb # Exchange API wrapper
-│   │       │   ├── account_manager.rb    # Account state
-│   │       │   ├── position_manager.rb   # Position tracking
-│   │       │   └── order_executor.rb     # Order execution
+│   │       │   ├── hyperliquid_client.rb   # Exchange API wrapper
+│   │       │   ├── account_manager.rb     # Account state
+│   │       │   ├── position_manager.rb    # Position tracking
+│   │       │   ├── order_executor.rb      # Order execution
+│   │       │   └── balance_sync_service.rb # Balance tracking & deposit/withdrawal detection
 │   │       ├── risk/
 │   │       │   ├── risk_manager.rb       # Centralized risk validation
 │   │       │   ├── position_sizer.rb     # Risk-based position sizing
 │   │       │   ├── stop_loss_manager.rb  # SL/TP enforcement
 │   │       │   └── circuit_breaker.rb    # Trading halt on losses
+│   │       ├── costs/
+│   │       │   ├── calculator.rb         # Main cost orchestrator
+│   │       │   ├── trading_fee_calculator.rb  # Hyperliquid fee calculations
+│   │       │   └── llm_cost_calculator.rb     # LLM API cost estimation
 │   │       └── trading_cycle.rb     # Main orchestrator
 │   ├── config/
 │   │   ├── settings.yml            # Trading parameters
@@ -270,7 +287,7 @@ HyperSense/
    # For remote databases, use DATABASE_URL instead:
    # DATABASE_URL=postgresql://user:password@host:5432/hypersense
 
-   # LLM Provider: anthropic, gemini, or ollama
+   # LLM Provider: anthropic, gemini, ollama, or openai
    LLM_PROVIDER=anthropic
 
    # Anthropic (required if LLM_PROVIDER=anthropic)
@@ -280,6 +297,10 @@ HyperSense/
    # Gemini (required if LLM_PROVIDER=gemini)
    # GEMINI_API_KEY=your_gemini_api_key
    # GEMINI_MODEL=gemini-2.0-flash-exp
+
+   # OpenAI (required if LLM_PROVIDER=openai)
+   # OPENAI_API_KEY=your_openai_api_key
+   # OPENAI_MODEL=gpt-5.2
 
    # Ollama (required if LLM_PROVIDER=ollama)
    # OLLAMA_API_BASE=http://localhost:11434/v1
@@ -340,10 +361,29 @@ risk:
 
 # Context Weights for Reasoning
 weights:
-  forecast: 0.6
-  sentiment: 0.2
-  technical: 0.15
-  whale_alerts: 0.05
+  technical: 0.50
+  sentiment: 0.25
+  forecast: 0.15
+  whale_alerts: 0.10
+
+# Cost Tracking
+costs:
+  trading:
+    taker_fee_pct: 0.000450       # 0.0450% per transaction
+    maker_fee_pct: 0.000150       # 0.0150% per transaction
+    default_order_type: taker
+  server:
+    monthly_cost: 15.00           # Monthly server cost
+  llm:
+    anthropic:
+      claude-sonnet-4-5:
+        input_per_million: 3.00
+        output_per_million: 15.00
+    openai:
+      gpt-5.2:
+        input_per_million: 1.75
+        output_per_million: 14.00
+    # ... other models (gemini, ollama)
 ```
 
 ## Current Implementation
@@ -370,7 +410,14 @@ snapshot = MarketSnapshot.latest_for("BTC")
 snapshot.price           # => 97000.0
 snapshot.rsi_signal      # => :neutral / :oversold / :overbought
 snapshot.macd_signal     # => :bullish / :bearish
+snapshot.atr_signal      # => :low_volatility / :normal_volatility / :high_volatility / :very_high_volatility
 snapshot.above_ema?(50)  # => true/false
+
+# ATR volatility bands (as % of price):
+# - :low_volatility       (ATR < 1%)
+# - :normal_volatility    (1% <= ATR < 2%)
+# - :high_volatility      (2% <= ATR < 3%)
+# - :very_high_volatility (ATR >= 3%)
 
 # Query historical data
 MarketSnapshot.for_symbol("ETH").last_hours(24)
@@ -388,12 +435,16 @@ calculator = Indicators::Calculator.new
 calculator.ema(prices, 20)   # EMA-20
 calculator.ema(prices, 50)   # EMA-50
 calculator.ema(prices, 100)  # EMA-100
+calculator.ema(prices, 200)  # EMA-200 (long-term trend, bull/bear market structure)
 
 # RSI (Relative Strength Index)
 calculator.rsi(prices, 14)   # 0-100, oversold < 30, overbought > 70
 
 # MACD
 calculator.macd(prices)      # { macd:, signal:, histogram: }
+
+# ATR (Average True Range) - Volatility indicator
+calculator.atr(candles, 14)  # Absolute ATR value
 
 # Pivot Points
 calculator.pivot_points(high, low, close)  # { pp:, r1:, r2:, s1:, s2: }
@@ -455,16 +506,20 @@ LLM agents receive data with assigned weights for prioritization.
 ```ruby
 # Context weights from settings.yml
 weights = {
-  forecast: 0.6,      # Price predictions (PRIMARY signal)
-  sentiment: 0.2,     # Fear & Greed + News
-  technical: 0.1,     # EMA, RSI, MACD, Pivots
-  whale_alerts: 0.1   # Large capital movements
+  technical: 0.50,    # EMA, RSI, MACD, ATR, Pivots (PRIMARY signal)
+  sentiment: 0.25,    # Fear & Greed + News
+  forecast: 0.15,     # Prophet ML price predictions
+  whale_alerts: 0.10  # Large capital movements
 }
 
 # Context assembler includes all weighted data
 assembler = Reasoning::ContextAssembler.new(symbol: "BTC")
 context = assembler.for_trading(macro_strategy: MacroStrategy.active)
 # Includes: forecast, news, whale_alerts, market_data, technical_indicators, sentiment
+
+# Technical indicators include:
+# - EMA (20, 50, 100, 200), RSI, MACD, Pivot Points
+# - ATR with volatility classification (low/normal/high/very_high)
 
 # LLM system prompt instructs to weight inputs accordingly:
 # "When data sources conflict, weight your decision according to these priorities."
@@ -473,6 +528,16 @@ context = assembler.for_trading(macro_strategy: MacroStrategy.active)
 ### 6. Macro Strategy (MacroStrategyJob - daily at 6am)
 
 High-level market analysis that sets the trading bias for the day.
+
+The macro strategy agent receives comprehensive market context including:
+- **Technical indicators**: EMA, RSI, MACD, ATR (with volatility classification), Pivot Points
+- **Market sentiment**: Fear & Greed Index, recent news
+- **Price forecasts**: Prophet ML predictions
+- **Whale alerts**: Large capital movements
+
+ATR volatility classification helps calibrate risk tolerance:
+- High ATR (volatile markets) → Lower risk tolerance recommended
+- Low ATR (calm markets) → Higher risk tolerance possible
 
 ```ruby
 # Runs daily at 6am via MacroStrategyJob
@@ -527,6 +592,61 @@ decisions = agent.decide_all(macro_strategy: MacroStrategy.active)
   "reasoning": "RSI neutral at 62, MACD bullish crossover, price above all EMAs"
 }
 ```
+
+### 4.1 Position Direction Evaluation (Long vs Short)
+
+HyperSense supports both **long** and **short** positions symmetrically. The direction decision follows a two-stage process:
+
+#### Stage 1: Macro Strategy Sets the Bias
+
+The `HighLevelAgent` (daily at 6am) analyzes weighted market data to set the trading bias:
+
+| Bias | Meaning | Favored Direction |
+|------|---------|-------------------|
+| **Bullish** | Market expected to rise | Long positions |
+| **Bearish** | Market expected to fall | Short positions |
+| **Neutral** | No clear direction | No directional preference |
+
+The bias is determined by weighted inputs:
+- **TECHNICAL (50%)** - EMA, RSI, MACD indicators (primary signal)
+- **SENTIMENT (25%)** - Fear & Greed Index + news
+- **FORECAST (15%)** - Prophet ML price predictions
+- **WHALE_ALERTS (10%)** - Large capital movements
+
+#### Stage 2: Low-Level Agent Aligns with Bias
+
+The `LowLevelAgent` (every 5 min) receives the macro context and follows this decision logic:
+
+| Position State | Signal | Macro Bias | Action |
+|----------------|--------|------------|--------|
+| No position | Bullish signals | Bullish | **Open LONG** |
+| No position | Bearish signals | Bearish | **Open SHORT** |
+| No position | Unclear signals | Any | HOLD |
+| Has position | Target reached | Any | CLOSE |
+| Has position | Trend continues | Any | HOLD |
+
+**Key insight**: The LLM is explicitly instructed (in the system prompt) to align trade direction with the macro bias. If the macro strategy is bullish, the agent will prefer long positions; if bearish, it will prefer shorts.
+
+#### Order Execution Mapping
+
+```
+direction: "long"  → Exchange order: side: "buy"
+direction: "short" → Exchange order: side: "sell"
+```
+
+#### PnL Calculation by Direction
+
+| Direction | Profit When | Loss When |
+|-----------|-------------|-----------|
+| **Long** | `current_price > entry_price` | `current_price < entry_price` |
+| **Short** | `current_price < entry_price` | `current_price > entry_price` |
+
+#### Stop-Loss / Take-Profit by Direction
+
+| Direction | SL Triggers When | TP Triggers When |
+|-----------|------------------|------------------|
+| **Long** | `price <= stop_loss_price` | `price >= take_profit_price` |
+| **Short** | `price >= stop_loss_price` | `price <= take_profit_price` |
 
 ### 5. Risk Validation
 
@@ -587,13 +707,61 @@ position.risk_reward_ratio    # => 3.0
 position.stop_loss_distance_pct # => 5.0 (%)
 ```
 
-**Circuit Breaker:**
+**Circuit Breaker & `trading_allowed`:**
+
+The circuit breaker is a safety mechanism that automatically halts all trading when risk thresholds are breached. It protects against catastrophic losses during adverse market conditions or strategy failures.
+
+**What `trading_allowed` means:**
+- `true` - Trading engine can execute new trades normally
+- `false` - All trading is halted; the system will only monitor existing positions (SL/TP)
+
+**Trigger conditions** (any one triggers the breaker):
+
+| Condition | Setting | Default | Example |
+|-----------|---------|---------|---------|
+| Daily loss exceeds threshold | `max_daily_loss` | 5% | Lost $500 on $10,000 account |
+| Consecutive losing trades | `max_consecutive_losses` | 3 | 3 losses in a row |
+
+**How it works:**
+1. `RiskMonitoringJob` runs every minute and calls `check_and_update!`
+2. When a position closes with a loss, `record_loss(amount)` is called
+3. If thresholds are exceeded, `trigger!` halts trading and starts cooldown
+4. After cooldown (default 24h), trading resumes automatically
+5. Winning trades reset the consecutive losses counter
+
+**State storage:** Uses Rails.cache with automatic daily expiry for loss tracking.
+
+**API exposure:**
+- `/api/v1/health` returns `trading_allowed: true/false` (used by frontend Header)
+- Dashboard shows `circuit_breaker.daily_loss` and `circuit_breaker.consecutive_losses`
+
 ```ruby
 breaker = Risk::CircuitBreaker.new
-breaker.trading_allowed?   # => true/false
+
+# Check before any trade
+unless breaker.trading_allowed?
+  Rails.logger.warn "Circuit breaker active: #{breaker.trigger_reason}"
+  return # Skip trade execution
+end
+
+# After trades
 breaker.record_loss(500)   # Record losing trade
 breaker.record_win(200)    # Record winning trade (resets consecutive losses)
-breaker.status             # => { trading_allowed: true, daily_loss: 500, ... }
+
+# Full status
+breaker.status
+# => {
+#      trading_allowed: true,
+#      daily_loss: 500,
+#      daily_loss_pct: 0.05,
+#      consecutive_losses: 1,
+#      triggered: false,
+#      trigger_reason: nil,
+#      cooldown_until: nil
+#    }
+
+# Manual reset (admin use)
+breaker.reset!
 ```
 
 ### 7. Execution Layer (Paper Trading)
@@ -647,6 +815,175 @@ pm.sync_from_hyperliquid
 pm.update_prices
 ```
 
+### 8. Cost Management
+
+On-the-fly cost tracking for trading fees, LLM API costs, and server costs. No database migrations required - all calculations performed at query time.
+
+About LLM API costs, the cost calculator uses these assumptions:
+- Utilization factor: 70% of max_tokens used on average
+- Input/Output ratio: 3:1 (trading prompts have extensive market context)
+
+```
+Per-Call Token Estimates
+
+| Agent               | Max Output | Est. Output | Est. Input | Total/Call |
+|---------------------|------------|-------------|------------|------------|
+| Low-level (trading) | 1,500      | 1,050       | 3,150      | 4,200      |
+| High-level (macro)  | 2,000      | 1,400       | 4,200      | 5,600      |
+
+Daily Call Volume (at 5-min frequency)
+
+Trading cycles:    24 hours × 60 min ÷ 5 min = 288 cycles/day
+Assets per cycle:  4 (BTC, ETH, SOL, BNB)
+Total LLM calls:   288 × 4 = 1,152 calls/day
+Plus macro:        1 call/day
+
+Daily Token Totals
+
+Trading input:   1,152 calls × 3,150 tokens = 3,628,800 tokens
+Trading output:  1,152 calls × 1,050 tokens = 1,209,600 tokens
+Macro input:     4,200 tokens
+Macro output:    1,400 tokens
+─────────────────────────────────────────────────────────────
+Total input:     ~3.63M tokens/day
+Total output:    ~1.21M tokens/day
+
+---
+Corrected Daily Cost Calculation
+
+Formula: (input_tokens × input_price / 1M) + (output_tokens × output_price / 1M)
+
+| Model                | Input $/1M | Output $/1M | Input Cost | Output Cost | Daily Total |
+|----------------------|------------|-------------|------------|-------------|-------------|
+| claude-sonnet-4-5    | $3.00      | $15.00      | $10.89     | $18.15      | $29.04      |
+| gpt-5.2              | $1.75      | $14.00      | $6.35      | $16.94      | $23.29      |
+| claude-haiku-4-5     | $1.00      | $5.00       | $3.63      | $6.05       | $9.68       |
+| gemini-2.0-flash-exp | $0.50      | $3.00       | $1.82      | $3.63       | $5.45       |
+| gpt-5-mini           | $0.25      | $2.00       | $0.91      | $2.42       | $3.33       |
+
+---
+Monthly Cost Projection (30 days)
+
+| Model                | Daily  | Monthly |
+|----------------------|--------|---------|
+| claude-sonnet-4-5    | $29.04 | $871    |
+| gpt-5.2              | $23.29 | $699    |
+| claude-haiku-4.5     | $9.68  | $290    |
+| gemini-2.0-flash-exp | $5.45  | $164    |
+| gpt-5-mini           | $0.25  | $100    |
+```
+
+**Cost Calculator:**
+```ruby
+calculator = Costs::Calculator.new
+
+# Get cost summary for a period
+summary = calculator.summary(period: :today)
+# => {
+#   trading_fees: { total: 5.23, ... },
+#   llm_costs: { total: 0.12, provider: "anthropic", model: "claude-sonnet-4-5" },
+#   server_cost: { daily_rate: 0.50, monthly: 15.00 },
+#   total_costs: 5.85
+# }
+
+# Get net P&L (gross - trading fees)
+net = calculator.net_pnl(period: :today)
+# => { gross_realized_pnl: 150.0, trading_fees: 5.23, net_realized_pnl: 144.77 }
+```
+
+**Trading Fee Calculator:**
+```ruby
+fee_calc = Costs::TradingFeeCalculator.new
+
+# Fees for a specific position
+fees = fee_calc.for_position(position)
+# => { entry_fee: 4.50, exit_fee: 4.50, total_fees: 9.00, entry_notional: 10000 }
+
+# Estimate fees before trading
+fee_calc.estimate(notional_value: 10_000, round_trip: true)
+# => 9.00 (taker rate: 0.0450% × 2)
+```
+
+**Position Fee Methods:**
+```ruby
+position = Position.find_by(symbol: "BTC")
+position.entry_fee        # => 4.50
+position.exit_fee         # => 4.50
+position.total_fees       # => 9.00
+position.net_pnl          # => 140.50 (gross P&L - fees)
+position.fee_breakdown    # => { entry_fee: 4.50, exit_fee: 4.50, ... }
+```
+
+**LLM Cost Estimation:**
+```ruby
+llm_calc = Costs::LLMCostCalculator.new
+
+# Estimated costs based on call counts and token settings
+costs = llm_calc.estimated_costs(since: 24.hours.ago)
+# => {
+#   total: 0.12,
+#   provider: "anthropic",
+#   model: "claude-sonnet-4-5",
+#   call_count: 15,
+#   estimated_input_tokens: 45000,
+#   estimated_output_tokens: 15000
+# }
+```
+
+### 9. Balance Tracking
+
+Track account balance history for accurate PnL calculation that accounts for deposits and withdrawals.
+
+**Problem Solved:** Without balance tracking, all-time PnL is calculated only from local Position records. If the user made trades outside HyperSense or deposited/withdrew funds, the PnL would be inaccurate.
+
+**Solution:** The `BalanceSyncService` tracks balance history and detects deposits/withdrawals by comparing balance changes with expected PnL from closed positions.
+
+**AccountBalance Model:**
+```ruby
+# Get balance history
+AccountBalance.latest           # => Most recent balance record
+AccountBalance.initial          # => First (initial) balance record
+AccountBalance.total_deposits   # => Sum of all deposit amounts
+AccountBalance.total_withdrawals # => Sum of all withdrawal amounts
+
+# Event types: initial, sync, deposit, withdrawal, adjustment
+balance = AccountBalance.latest
+balance.event_type    # => "deposit"
+balance.balance       # => 15000.0
+balance.delta         # => 5000.0 (change from previous)
+```
+
+**BalanceSyncService:**
+```ruby
+service = Execution::BalanceSyncService.new
+
+# Sync balance from Hyperliquid (called automatically during TradingCycle)
+result = service.sync!
+# => { created: true, balance: 15000.0, event_type: "deposit" }
+
+# Calculate accurate PnL (accounts for deposits/withdrawals)
+service.calculated_pnl
+# => 1000.0 (current - initial - deposits + withdrawals)
+
+# Get balance history summary
+service.balance_history
+# => {
+#   initial_balance: 10000.0,
+#   current_balance: 16000.0,
+#   total_deposits: 5000.0,
+#   total_withdrawals: 0.0,
+#   calculated_pnl: 1000.0,
+#   last_sync: Time
+# }
+```
+
+**PnL Formula:**
+```
+calculated_pnl = current_balance - initial_balance - total_deposits + total_withdrawals
+```
+
+**Detection Threshold:** Changes below $1 are treated as normal trading activity. Larger unexplained changes are classified as deposits (if positive) or withdrawals (if negative).
+
 ---
 
 ## Development Status
@@ -691,7 +1028,7 @@ pm.update_prices
 - [x] Paper trading mode (already implemented in Phase 4)
 
 ### Phase 5.1: Predictive Modeling & Weighted Context ✅
-- [x] Weighted context system (forecast: 0.6, sentiment: 0.2, technical: 0.1, whale_alerts: 0.1)
+- [x] Weighted context system (technical: 0.50, sentiment: 0.25, forecast: 0.15, whale_alerts: 0.10)
 - [x] Prophet-based price forecasting (1m, 15m, 1h predictions)
 - [x] Forecast model with MAE/MAPE validation tracking
 - [x] News fetcher (RSS from coinjournal.net)
@@ -711,6 +1048,7 @@ pm.update_prices
 - [x] React Router with detail pages (decisions, strategies, forecasts, snapshots)
 - [x] Reusable filter components (date range, symbol, status, search, pagination)
 - [x] Paginated list endpoints with filters
+- [x] CostSummaryCard component (Trading fee, LLM cost estimation etc.)
 
 ### Phase 7: Production
 - [ ] Dockerfile
@@ -736,6 +1074,7 @@ pm.update_prices
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
+| `/api/v1/health` | GET | App status, version, paper_trading, trading_allowed |
 | `/api/v1/dashboard` | GET | Aggregated dashboard data |
 | `/api/v1/dashboard/account` | GET | Account summary |
 | `/api/v1/dashboard/system_status` | GET | System health status |
@@ -754,6 +1093,16 @@ pm.update_prices
 | `/api/v1/execution_logs` | GET | Execution logs (paginated with filters) |
 | `/api/v1/execution_logs/:id` | GET | Single execution log details |
 | `/api/v1/execution_logs/stats` | GET | Execution statistics (success rate, by action) |
+| `/api/v1/costs/summary` | GET | Cost breakdown for period (trading fees, LLM, server) |
+| `/api/v1/costs/llm` | GET | Detailed LLM cost breakdown |
+| `/api/v1/costs/trading` | GET | Detailed trading fee breakdown |
+| `/api/v1/orders` | GET | Orders (paginated with filters) |
+| `/api/v1/orders/:id` | GET | Single order with full details |
+| `/api/v1/orders/active` | GET | Pending and submitted orders |
+| `/api/v1/orders/stats` | GET | Order statistics (counts, fill rate, slippage) |
+| `/api/v1/account_balances` | GET | Balance history (paginated with filters) |
+| `/api/v1/account_balances/:id` | GET | Single balance record details |
+| `/api/v1/account_balances/summary` | GET | Balance summary with calculated PnL |
 
 **WebSocket Channels:**
 
@@ -776,20 +1125,21 @@ const markets = cable.subscriptions.create({ channel: "MarketsChannel", symbol: 
 
 **Dashboard Components:**
 
-- **AccountSummary** - Open positions count, unrealized PnL, margin used, daily P&L
-- **MarketOverview** - Current prices, RSI, MACD, EMA signals, forecasts for all assets
-- **PositionsTable** - Open positions with entry price, current price, PnL, SL/TP
+- **AccountSummary** - Open positions, unrealized PnL, margin used, daily P&L, aggregated volatility badge
+- **MarketOverview** - Current prices, RSI, MACD, EMA signals, forecasts, per-coin volatility with ATR %
+- **PositionsTable** - Open positions with entry price, current price, PnL (gross/net), SL/TP
 - **EquityCurve** - Cumulative PnL chart with win rate and statistics
 - **MacroStrategyCard** - Current market bias, risk tolerance, narrative, key levels
-- **DecisionLog** - Recent trading decisions with reasoning
-- **SystemStatus** - Health status of market data, trading cycle, macro strategy
+- **DecisionLog** - Recent trading decisions with volatility badge, LLM model, reasoning
+- **SystemStatus** - Health status of market data, trading cycle, macro strategy, next cycle timing
+- **CostSummaryCard** - Net P&L, trading fees, LLM costs, server costs breakdown
 
 **Detail Pages (with React Router):**
 
 | Route | Page | Features |
 |-------|------|----------|
 | `/` | Dashboard | Main dashboard with all cards |
-| `/decisions` | DecisionsPage | Trading decisions with status, operation, symbol filters |
+| `/decisions` | DecisionsPage | Trading decisions with status, operation, symbol, volatility filters |
 | `/macro-strategies` | MacroStrategiesPage | Strategy history with bias filter, expandable narrative |
 | `/forecasts` | ForecastsPage | Price forecasts with symbol, timeframe, date filters |
 | `/market-snapshots` | MarketSnapshotsPage | Market snapshots with RSI/MACD signals, expandable indicators |

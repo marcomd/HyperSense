@@ -229,6 +229,39 @@ class Position < ApplicationRecord
     end
   end
 
+  # Trading Fees (calculated on-the-fly)
+
+  # Calculate entry fee for this position
+  # @return [Float] Entry fee in USD
+  def entry_fee
+    fee_breakdown[:entry_fee]
+  end
+
+  # Calculate exit fee for this position
+  # @return [Float] Exit fee in USD (estimated if position is open)
+  def exit_fee
+    fee_breakdown[:exit_fee]
+  end
+
+  # Calculate total round-trip fees
+  # @return [Float] Total fees in USD
+  def total_fees
+    entry_fee + exit_fee
+  end
+
+  # Calculate net P&L (gross - fees)
+  # @return [Float] Net P&L in USD
+  def net_pnl
+    gross = closed? ? realized_pnl.to_f : unrealized_pnl.to_f
+    gross - total_fees
+  end
+
+  # Get complete fee breakdown from the calculator
+  # @return [Hash] Fee details for this position
+  def fee_breakdown
+    @fee_breakdown ||= Costs::TradingFeeCalculator.new.for_position(self)
+  end
+
   private
 
   def set_opened_at

@@ -56,6 +56,30 @@ Rails.application.routes.draw do
           get :stats
         end
       end
+
+      # Orders
+      resources :orders, only: [ :index, :show ] do
+        collection do
+          get :active
+          get :stats
+        end
+      end
+
+      # Account Balances
+      resources :account_balances, only: [ :index, :show ] do
+        collection do
+          get :summary
+        end
+      end
+
+      # Cost Tracking
+      resources :costs, only: [] do
+        collection do
+          get :summary
+          get :llm
+          get :trading
+        end
+      end
     end
   end
 

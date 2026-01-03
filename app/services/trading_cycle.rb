@@ -72,9 +72,11 @@ class TradingCycle
 
   private
 
-  # Sync positions from Hyperliquid if client is configured
+  # Sync positions and balance from Hyperliquid if client is configured
   #
-  # Fetches current positions from the exchange and updates local database.
+  # Fetches current positions and account balance from the exchange and
+  # updates local database. Balance sync detects deposits/withdrawals
+  # for accurate PnL calculation.
   # Silently handles API errors to avoid disrupting the trading cycle.
   #
   # @return [void]
@@ -82,11 +84,33 @@ class TradingCycle
     client = Execution::HyperliquidClient.new
     return unless client.configured?
 
+    # Sync balance first (for accurate PnL tracking)
+    sync_balance(client)
+
+    # Sync positions
     @logger.info "[TradingCycle] Syncing positions from Hyperliquid..."
     @position_manager.sync_from_hyperliquid
     @position_manager.update_prices
   rescue StandardError => e
     @logger.warn "[TradingCycle] Position sync failed: #{e.class} - #{e.message}"
+  end
+
+  # Sync account balance from Hyperliquid
+  # Creates AccountBalance record and detects deposits/withdrawals
+  #
+  # @param client [Execution::HyperliquidClient] Configured client
+  # @return [void]
+  def sync_balance(client)
+    balance_syncer = Execution::BalanceSyncService.new(client: client)
+    result = balance_syncer.sync!
+
+    if result[:created]
+      @logger.info "[TradingCycle] Balance sync: #{result[:event_type]} - $#{result[:balance]}"
+    elsif result[:skipped]
+      @logger.debug "[TradingCycle] Balance sync skipped: #{result[:reason]}"
+    end
+  rescue StandardError => e
+    @logger.warn "[TradingCycle] Balance sync failed: #{e.class} - #{e.message}"
   end
 
   # Ensure we have a valid macro strategy, refresh if needed
@@ -147,6 +171,21 @@ class TradingCycle
       unless result.approved?
         decision.reject!(result.rejection_reason)
         next false
+      end
+
+      # RSI-based entry filter (code-level enforcement)
+      if decision.operation == "open"
+        snapshot = MarketSnapshot.latest_for(decision.symbol)
+        rsi = snapshot&.indicators&.dig("rsi_14")
+        if rsi
+          if decision.direction == "long" && rsi > 70
+            decision.reject!("RSI #{rsi.round(1)} overbought - cannot open long")
+            next false
+          elsif decision.direction == "short" && rsi < 30
+            decision.reject!("RSI #{rsi.round(1)} oversold - cannot open short")
+            next false
+          end
+        end
       end
 
       # For open operations, calculate optimal position size

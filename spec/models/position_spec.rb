@@ -501,4 +501,65 @@ RSpec.describe Position do
       end
     end
   end
+
+  describe "trading fees" do
+    describe "#entry_fee" do
+      it "calculates entry fee based on notional value" do
+        # Notional = 100,000 * 0.1 = 10,000
+        # Fee = 10,000 * 0.00045 = 4.5
+        position = build(:position, entry_price: 100_000, size: 0.1)
+        expect(position.entry_fee).to be_within(0.001).of(4.5)
+      end
+    end
+
+    describe "#exit_fee" do
+      it "estimates exit fee for open positions using current price" do
+        position = build(:position, entry_price: 100_000, current_price: 105_000, size: 0.1)
+        # Exit notional = 105,000 * 0.1 = 10,500
+        # Fee = 10,500 * 0.00045 = 4.725
+        expect(position.exit_fee).to be_within(0.001).of(4.725)
+      end
+
+      it "calculates actual exit fee for closed positions" do
+        position = build(:position, :closed, entry_price: 100_000, current_price: 110_000, size: 0.1)
+        # Exit notional = 110,000 * 0.1 = 11,000
+        # Fee = 11,000 * 0.00045 = 4.95
+        expect(position.exit_fee).to be_within(0.001).of(4.95)
+      end
+    end
+
+    describe "#total_fees" do
+      it "returns sum of entry and exit fees" do
+        position = build(:position, entry_price: 100_000, current_price: 100_000, size: 0.1)
+        expect(position.total_fees).to be_within(0.01).of(9.0)
+      end
+    end
+
+    describe "#net_pnl" do
+      it "returns gross P&L minus trading fees for open positions" do
+        # Gross PnL = 0.1 * (105,000 - 100,000) = 500
+        # Fees = ~9.225 (entry + estimated exit)
+        # Net = 500 - 9.225 = ~490.78
+        position = build(:position, entry_price: 100_000, current_price: 105_000, size: 0.1, unrealized_pnl: 500)
+        expect(position.net_pnl).to be_within(0.5).of(490.5)
+      end
+
+      it "returns gross P&L minus trading fees for closed positions" do
+        # Realized PnL = 500
+        # Fees = ~9.45 (entry + exit at 110k)
+        # Net = 500 - 9.45 = ~490.55
+        position = build(:position, :closed, entry_price: 100_000, current_price: 110_000, size: 0.1, realized_pnl: 500)
+        expect(position.net_pnl).to be_within(0.5).of(490.5)
+      end
+    end
+
+    describe "#fee_breakdown" do
+      it "returns detailed fee information" do
+        position = build(:position, entry_price: 100_000, size: 0.1)
+        breakdown = position.fee_breakdown
+
+        expect(breakdown).to include(:entry_fee, :exit_fee, :total_fee, :fee_rate, :estimated)
+      end
+    end
+  end
 end

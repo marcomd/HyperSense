@@ -12,8 +12,24 @@ assets:
 
 # Trading Cycle Configuration
 trading:
-  cycle_interval_minutes: 5      # How often the trading cycle runs (3-15 min)
   paper_trading: true            # Enable paper trading mode (no real orders)
+
+# Volatility-Based Dynamic Scheduling
+# Trading cycle interval adjusts based on ATR (Average True Range)
+volatility:
+  # ATR thresholds as percentage of price
+  thresholds:
+    very_high: 0.03   # >= 3% ATR = Very High volatility
+    high: 0.02        # >= 2% ATR = High volatility
+    medium: 0.01      # >= 1% ATR = Medium volatility (below = Low)
+  # Corresponding trading cycle intervals in minutes
+  intervals:
+    very_high: 3      # 3 min - most frequent for volatile markets
+    high: 6           # 6 min
+    medium: 12        # 12 min - default
+    low: 25           # 25 min - least frequent for quiet markets
+  # Fallback interval when volatility cannot be determined
+  default_interval: 12
 
 # Risk Management
 risk:
@@ -25,7 +41,7 @@ risk:
   # Position Sizing
   max_risk_per_trade: 0.01       # 1% of capital at risk per trade
   # Risk/Reward Validation
-  min_risk_reward_ratio: 2.0     # Minimum R/R ratio (2:1)
+  min_risk_reward_ratio: 1.5     # Minimum R/R ratio (1.5:1) - lowered from 2.0 to allow more trades
   enforce_risk_reward_ratio: true # Reject trades below min R/R (false = warn only)
   # Circuit Breaker
   max_daily_loss: 0.05           # 5% max daily loss triggers circuit breaker
@@ -38,18 +54,22 @@ defaults:
   take_profit_pct: 0.10          # 10% take profit
 
 # Context Weights for Reasoning
+# Technical indicators are the primary signal (proven, based on actual price action)
+# Sentiment provides confirmation/contrarian signals
+# Forecast (Prophet ML) is supplementary (not designed for volatile crypto markets)
+# Whale alerts hint at smart money positioning
 weights:
-  forecast: 0.6
-  sentiment: 0.2
-  technical: 0.15
-  whale_alerts: 0.05
+  technical: 0.50
+  sentiment: 0.25
+  forecast: 0.15
+  whale_alerts: 0.10
 
 # Macro Strategy
 macro:
   refresh_interval_hours: 24     # How often to refresh macro strategy
   lookback_days: 7               # Days of data for macro analysis
 
-# LLM Configuration (supports Anthropic, Gemini, Ollama)
+# LLM Configuration (supports Anthropic, Gemini, Ollama, OpenAI)
 llm:
   provider: <%= ENV.fetch('LLM_PROVIDER', 'anthropic') %>
   anthropic:
@@ -61,6 +81,9 @@ llm:
   ollama:
     api_base: <%= ENV.fetch('OLLAMA_API_BASE', 'http://localhost:11434/v1') %>
     model: <%= ENV.fetch('OLLAMA_MODEL', 'llama3') %>
+  openai:
+    api_key: <%= ENV.fetch('OPENAI_API_KEY', '') %>
+    model: <%= ENV.fetch('OPENAI_MODEL', 'gpt-5.2') %>
   high_level:
     max_tokens: 2000
     temperature: 0.3
@@ -75,6 +98,7 @@ hyperliquid:
   testnet_url: "https://api.hyperliquid-testnet.xyz"
   retry_attempts: 3                # Number of retry attempts for failed requests
   timeout: 30                      # Request timeout in seconds
+  slippage: 0.005                  # 0.5% slippage for market orders
 
 # API Rate Limits (requests per minute)
 rate_limits:
@@ -82,3 +106,46 @@ rate_limits:
   coingecko: 50
   fear_greed: 10
   hyperliquid: 100
+
+# Cost Tracking Configuration
+# Used for on-the-fly cost calculations and net P&L reporting
+costs:
+  # Trading fees (Hyperliquid)
+  trading:
+    taker_fee_pct: 0.000450       # 0.0450% per transaction (market orders)
+    maker_fee_pct: 0.000150       # 0.0150% per transaction (limit orders)
+    default_order_type: taker     # Assume taker fees for market orders
+
+  # Server costs (monthly, in USD)
+  server:
+    monthly_cost: 15.00
+
+  # LLM costs (per 1 million tokens, in USD)
+  # Update these when pricing changes
+  llm:
+    anthropic:
+      claude-sonnet-4-5:
+        input_per_million: 3.00
+        output_per_million: 15.00
+      claude-haiku-4-5:
+        input_per_million: 1.00
+        output_per_million: 5.00
+    gemini:
+      gemini-2.0-flash-exp:
+        input_per_million: 0.50
+        output_per_million: 3.00
+      gemini-3-flash-preview:
+        input_per_million: 0.50
+        output_per_million: 3.00
+    ollama:
+      # Ollama is free (local inference)
+      default:
+        input_per_million: 0.00
+        output_per_million: 0.00
+    openai:
+      gpt-5.2:
+        input_per_million: 1.75
+        output_per_million: 14.00
+      gpt-5-mini:
+        input_per_million: 0.25
+        output_per_million: 2.00

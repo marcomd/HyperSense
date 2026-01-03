@@ -2,6 +2,469 @@
 
 All notable changes to HyperSense.
 
+## [0.33.5] - 2026-01-03
+
+### Fixed
+- **Zeitwerk Autoloading** - Fixed `LLM::Errors` constant not found error in CI/production
+  - Restructured `LLM::Error` → `LLM::Errors::Base` to match Zeitwerk naming conventions
+  - Error classes now under `LLM::Errors::` namespace (RateLimitError, APIError, ConfigurationError, InvalidResponseError)
+  - Removed `require_relative` from client.rb (Zeitwerk handles autoloading)
+
+### Changed
+- **GitHub Actions CI** - Added RSpec test job to CI workflow
+  - Tests now run on every PR and push to master
+  - Uses PostgreSQL 16 service container
+  - Changed `db:create db:migrate` to `db:prepare` for multi-database support
+
+## [0.33.4] - 2026-01-02
+
+### Fixed
+- **Account Summary Aggregated Volatility** - Dashboard now shows highest volatility across all assets
+  - Previously showed the latest decision's symbol-specific volatility (regression from 0.33.3)
+  - Now derives aggregated level from `next_cycle_interval` (e.g., if SOL is "medium", shows "medium")
+  - Added `level_from_interval` helper to map interval back to volatility level
+
+## [0.33.3] - 2026-01-02
+
+### Fixed
+
+- **Per-Symbol ATR Values** - Each trading decision now stores its own symbol-specific ATR percentage
+  - Previously all decisions in a cycle got the same ATR from the most volatile asset
+  - Now BTC decisions show BTC's ATR (e.g., 0.6%), ETH shows ETH's ATR (e.g., 0.75%), etc.
+  - Job scheduling still uses highest volatility (smallest interval) across all assets
+
+## [0.33.2] - 2026-01-02
+
+### Fixed
+- **Multiple Active MacroStrategies** - Only one MacroStrategy should be active at a time
+  - When `MacroStrategyJob` creates a new strategy, it now expires all previous non-stale strategies
+  - Sets `valid_until = Time.current` on previous strategies so they become stale immediately
+  - Applied to both successful LLM responses and fallback strategies
+  - Added `expire_previous_strategies` private method to `HighLevelAgent`
+
+## [0.33.1] - 2026-01-02
+
+### Fixed
+- **ATR Value Display** - Fixed incorrect ATR percentage display in Trading Decisions page
+  - Was storing raw `atr_value` instead of `atr_percentage` in TradingDecision
+  - Frontend multiplies by 100 for percentage display (e.g., 0.025 → 2.50%)
+  - Previously showed incorrect values like 131% instead of 1.31%
+
+## [0.33.0] - 2026-01-02
+
+### Added
+- **EMA 200 Indicator** - Added 200-period Exponential Moving Average for long-term trend analysis
+  - Enables Golden Cross / Death Cross detection (50 EMA crossing 200 EMA)
+  - Price above/below 200 EMA defines bull/bear market structure
+  - Displayed in MarketOverview dashboard card
+  - Available in LLM context for trading decisions
+
+### Changed
+- **Candle Fetch Limit** - Increased from 150 to 250 hourly candles in MarketSnapshotJob
+  - Ensures EMA 200 has sufficient data immediately (Binance API allows up to 1000)
+
+### Technical Details
+- Updated `Indicators::Calculator.calculate_all` to include `ema_200`
+- Updated `Reasoning::ContextAssembler` with `ema_200` and `above_ema_200` signal
+- Updated `Reasoning::HighLevelAgent` prompt to display `Above EMA-200` for each asset
+- Updated `Reasoning::LowLevelAgent` prompt to display EMA-100, EMA-200 values and signals
+- Updated `MarketDataController` and `DashboardController` API responses
+- Added `above_ema_200` to MarketOverview frontend component
+- New test coverage for EMA 200 calculation
+
+### Supports Frontend (0.15.0)
+
+## [0.32.0] - 2026-01-02
+
+### Added
+- **RSI Entry Filters** - Prevent opening positions at extreme RSI levels
+  - Block long entries when RSI > 70 (overbought)
+  - Block short entries when RSI < 30 (oversold)
+  - Code-level enforcement in TradingCycle.filter_and_approve
+- **Direction Independence from Macro** - Allow shorts during bullish macro and longs during bearish macro
+  - Technical signals can override macro bias when strong (RSI extreme + MACD divergence)
+  - Enables the agent to capture both directional moves
+- **Improved Close Rules** - Prevent premature position exits
+  - Close only when: price within 1% of SL/TP, or confirmed trend reversal (RSI crosses 50 AND MACD histogram changes sign)
+  - Minimum 30-minute hold time before close (unless SL/TP triggered)
+  - Removed "technical deterioration" as valid close reason
+
+### Changed
+- **Risk/Reward Ratio** - Lowered minimum from 2.0 to 1.5 to allow more trades
+  - Updated DEFAULT_MIN_RISK_REWARD_RATIO in RiskManager
+  - Updated settings.yml default value
+
+### Technical Details
+- Updated SYSTEM_PROMPT in `Reasoning::LowLevelAgent` with new rules
+- Added RSI validation in `TradingCycle#filter_and_approve`
+- New spec file: `spec/services/trading_cycle_spec.rb`
+- Updated `spec/services/risk/risk_manager_spec.rb` for new R/R ratio
+
+## [0.31.0] - 2026-01-02
+
+### Added
+- **Orders API** - REST endpoints for order history and statistics
+  - `GET /api/v1/orders` - List orders with filters (status, symbol, side, order_type, date range)
+  - `GET /api/v1/orders/:id` - Single order with full details including linked decision/position
+  - `GET /api/v1/orders/active` - Pending and submitted orders
+  - `GET /api/v1/orders/stats` - Order statistics (counts by status/side/type, fill rate, slippage)
+- **Account Balances API** - REST endpoints for balance history and PnL summary
+  - `GET /api/v1/account_balances` - List balance records with filters (event_type, date range)
+  - `GET /api/v1/account_balances/:id` - Single balance record with Hyperliquid data
+  - `GET /api/v1/account_balances/summary` - Current balance summary with calculated PnL
+
+### Technical Details
+- `Api::V1::OrdersController` - Orders API with filtering, pagination, and statistics
+- `Api::V1::AccountBalancesController` - Balance history API with summary endpoint
+- Full test coverage for both controllers (38 new tests)
+
+### Supports Frontend (0.14.0)
+
+## [0.30.0] - 2026-01-02
+
+### Added
+- **Balance Tracking System** - Track account balance history for accurate PnL calculation
+  - `AccountBalance` model - Stores balance snapshots with event classification
+  - `Execution::BalanceSyncService` - Syncs balance from Hyperliquid, detects deposits/withdrawals
+  - Automatic balance sync during each TradingCycle
+- **Deposit/Withdrawal Detection** - Distinguishes external funds from trading gains/losses
+  - Compares balance changes with expected PnL from closed positions
+  - Classifies events as: initial, sync, deposit, withdrawal, adjustment
+- **Calculated PnL** - Accurate all-time PnL that accounts for deposits/withdrawals
+  - Formula: `current_balance - initial_balance - deposits + withdrawals`
+  - Dashboard now shows `calculated_pnl` alongside legacy `all_time_pnl`
+- **Balance History in Dashboard** - New `balance_history` object in account summary
+  - `initial_balance` - Starting capital (first recorded balance)
+  - `total_deposits` - Sum of all detected deposits
+  - `total_withdrawals` - Sum of all detected withdrawals
+  - `last_sync` - Timestamp of last balance sync
+
+### Technical Details
+- Migration: `CreateAccountBalances` with JSONB for raw Hyperliquid data
+- `AccountBalance` model with scopes: deposits, withdrawals, syncs, initial_records
+- `BalanceSyncService#sync!` - Main sync method, returns event type and balance
+- `BalanceSyncService#calculated_pnl` - Returns accurate PnL excluding deposits/withdrawals
+- `TradingCycle#sync_balance` - Integrated at start of position sync
+- `DashboardController#account_summary` - Now includes calculated_pnl and balance_history
+
+## [0.29.0] - 2026-01-02
+
+### Added
+- **Hyperliquid Account Data in Dashboard** - Exchange balance and account info now shown in Account Summary
+  - `hyperliquid.balance` - Current account value from exchange API
+  - `hyperliquid.available_margin` - Available margin for trading
+  - `hyperliquid.margin_used` - Margin currently in use
+  - `hyperliquid.positions_count` - Number of positions on exchange
+  - `hyperliquid.configured` - Whether Hyperliquid credentials are set
+- **All-Time PnL Tracking** - Dashboard now shows total realized + unrealized PnL from all positions
+  - `total_realized_pnl` - Sum of realized PnL from all closed positions
+  - `all_time_pnl` - Combined realized + unrealized PnL
+- **Testnet Mode Indicator** - `testnet_mode` field shows when using Hyperliquid testnet
+- **Enhanced Position Sync Logging** - Debug logs now show account state during position sync
+
+### Technical Details
+- `DashboardController#fetch_hyperliquid_account_data` - Fetches account state from Hyperliquid
+- `PositionManager#sync_from_hyperliquid` - Now logs testnet status and account value
+
+### Supports Frontend (0.13.0)
+
+## [0.28.0] - 2026-01-02
+
+### Added
+- **Tunnel Configuration via Environment Variables** - Configurable remote access for development
+  - `BACKEND_TUNNEL_HOST` - Hostname for Rails host authorization (e.g., `your-tunnel.ngrok-free.app`)
+  - `FRONTEND_TUNNEL_URL` - Full URL for CORS and ActionCable origins (e.g., `https://your-tunnel.pinggy.link`)
+  - Updated `.env.example` with tunnel configuration section
+
+### Changed
+- **Dynamic Host Authorization** - `config.hosts` now reads from `BACKEND_TUNNEL_HOST` env variable
+- **Dynamic CORS Origins** - `cors.rb` now uses `FRONTEND_TUNNEL_URL` for allowed origins
+- **Dynamic ActionCable Origins** - `allowed_request_origins` reads from `FRONTEND_TUNNEL_URL`
+
+### Technical Details
+- `config/environments/development.rb` - Conditionally adds tunnel hosts from ENV
+- `config/initializers/cors.rb` - Uses `FRONTEND_TUNNEL_URL` or `FRONTEND_URL` for origins
+
+### Supports Frontend (0.12.0)
+
+## [0.27.0] - 2026-01-01
+
+### Changed
+- **Health Endpoint as Single Source of Truth** - `/api/v1/health` now provides all app-wide status
+  - Added `trading_allowed` field (circuit breaker status) to health endpoint
+  - Removed `trading_allowed` from dashboard's `circuit_breaker` object (DRY principle)
+  - Frontend uses `/health` for Header status indicators across all pages
+
+### API Changes
+- `GET /api/v1/health` - Now includes `trading_allowed` boolean:
+  ```json
+  {
+    "status": "ok",
+    "version": "0.27.0",
+    "environment": "development",
+    "paper_trading": false,
+    "trading_allowed": true,
+    "timestamp": "2026-01-01T14:30:00Z"
+  }
+  ```
+- `GET /api/v1/dashboard` - Account `circuit_breaker` no longer includes `trading_allowed`:
+  ```json
+  {
+    "circuit_breaker": {
+      "daily_loss": -50.0,
+      "consecutive_losses": 0
+    }
+  }
+  ```
+
+### Supports Frontend (0.10.0)
+
+## [0.26.0] - 2026-01-01
+
+### Added
+- **ATR in Macro Strategy Context** - ATR indicator now included in high-level agent reasoning
+  - `MarketSnapshot#atr_signal` - Returns volatility classification (:low_volatility, :normal_volatility, :high_volatility, :very_high_volatility)
+  - `ContextAssembler` - Now includes `atr_14` value and `atr` signal in technical indicators
+  - `HighLevelAgent` - Displays ATR value with volatility classification in assets overview prompt
+  - Uses 4-band volatility thresholds aligned with dynamic scheduling (< 1%, 1-2%, 2-3%, >= 3%)
+
+### Changed
+- `MarketSnapshot` - Added ATR threshold constants for volatility classification
+- Factory `:market_snapshot` - Now includes `atr_14` indicator with volatility traits
+
+## [0.25.0] - 2026-01-01
+
+### Added
+- **Volatility Intervals in Dashboard API** - Dashboard now exposes configured intervals for each volatility level
+  - `DashboardController#build_volatility_info` - Returns `intervals` object with timing configuration
+  - Enables frontend to display actual interval values without hardcoding
+  - Example response: `intervals: { very_high: 3, high: 6, medium: 12, low: 25 }`
+
+### API Changes
+- `GET /api/v1/dashboard` - Account summary `volatility_info` now includes `intervals` field:
+  ```json
+  {
+    "volatility_info": {
+      "volatility_level": "medium",
+      "atr_value": 0.015,
+      "next_cycle_interval": 12,
+      "next_cycle_at": "2026-01-01T14:30:00Z",
+      "last_decision_at": "2026-01-01T14:18:00Z",
+      "intervals": {
+        "very_high": 3,
+        "high": 6,
+        "medium": 12,
+        "low": 25
+      }
+    }
+  }
+  ```
+
+### Supports Frontend (0.9.0)
+
+## [0.24.0] - 2026-01-01
+
+### Added
+- **ATR Volatility API Exposure** - Volatility information now available in API responses
+  - `DecisionsController` - Serializes `volatility_level`, `atr_value`, `next_cycle_interval`
+  - `DashboardController` - Account summary includes `volatility_info` from latest decision
+  - `DashboardController` - Recent decisions now include `volatility_level` for dashboard display
+  - New filter: `volatility_level` parameter for `/api/v1/decisions` endpoint
+  - `llm_model` moved from list serialization to detailed view only
+
+### Changed
+- **Dynamic Trading Cycle Health Threshold** - `system_status.trading_cycle.healthy` now uses
+  dynamic threshold based on `next_cycle_interval` + 2 min buffer instead of hardcoded 15 min
+  - Prevents false "unhealthy" status when using longer intervals (e.g., 25 min for low volatility)
+
+### API Changes
+- `GET /api/v1/decisions` - Now includes volatility fields in response
+- `GET /api/v1/decisions?volatility_level=high` - New filter parameter
+- `GET /api/v1/dashboard` - Account summary includes `volatility_info` object with:
+  - `volatility_level` - Current volatility classification
+  - `atr_value` - Raw ATR percentage
+  - `next_cycle_interval` - Minutes until next trading cycle
+  - `next_cycle_at` - ISO8601 timestamp of next scheduled cycle
+  - `last_decision_at` - When the latest decision was made
+- `GET /api/v1/dashboard` - Recent decisions now include `volatility_level`
+
+### Supports Frontend (0.8.0)
+
+## [0.23.0] - 2025-12-31
+
+### Added
+- **Dynamic Volatility-Based Job Scheduling** - Trading cycle interval now adjusts based on market volatility
+  - `Indicators::Calculator#atr` - ATR (Average True Range) indicator for volatility measurement
+  - `Indicators::VolatilityClassifier` - Classifies ATR into 4 levels with corresponding intervals
+  - `BootstrapTradingCycleJob` - Safety net job to ensure trading cycle chain is running
+  - Volatility levels: Very High (3 min), High (6 min), Medium (12 min), Low (25 min)
+  - TradingDecision gains `volatility_level`, `atr_value`, `next_cycle_interval` columns
+  - ForecastJob now runs 1 minute before each TradingCycleJob for fresh forecasts
+
+### Changed
+- `TradingCycleJob` - Now self-scheduling with dynamic intervals based on ATR volatility
+- `ForecastJob` - Removed from recurring.yml, now triggered by TradingCycleJob
+- `config/recurring.yml` - Added BootstrapTradingCycleJob (every 30 min safety net)
+
+### Configuration
+New `volatility` section in `config/settings.yml`:
+```yaml
+volatility:
+  thresholds:
+    very_high: 0.03   # >= 3% ATR
+    high: 0.02        # >= 2% ATR
+    medium: 0.01      # >= 1% ATR
+  intervals:
+    very_high: 3      # minutes
+    high: 6
+    medium: 12
+    low: 25
+  default_interval: 12
+```
+
+### Technical Details
+- 1 new database migration (`add_volatility_to_trading_decisions`)
+- ATR calculated using 14-period EMA of True Range
+- Bootstrap mechanism ensures chain restarts after app/worker restart
+- `ensure` block guarantees next job is always scheduled
+
+## [0.22.0] - 2025-12-31
+
+### Added
+- **OpenAI provider support** - Added OpenAI as a new LLM provider option
+  - Supports `gpt-5.2` (default) and `gpt-5-mini` models
+  - Configure via `LLM_PROVIDER=openai` environment variable
+  - Requires `OPENAI_API_KEY` and optional `OPENAI_MODEL`
+  - Full cost tracking integration with pricing: $1.75/$14.00 per 1M tokens (gpt-5.2)
+  - 6 new tests for OpenAI provider support
+
+### Configuration
+New environment variables:
+```bash
+LLM_PROVIDER=openai
+OPENAI_API_KEY=your_openai_api_key
+OPENAI_MODEL=gpt-5.2  # or gpt-5-mini
+```
+
+New cost configuration in `config/settings.yml`:
+```yaml
+costs:
+  llm:
+    openai:
+      gpt-5.2:
+        input_per_million: 1.75
+        output_per_million: 14.00
+      gpt-5-mini:
+        input_per_million: 0.25
+        output_per_million: 2.00
+```
+
+## [0.21.1] - 2025-12-31
+
+### Fixed
+- **Dashboard reasoning truncation** - Removed server-side truncation of decision reasoning text
+  - Frontend now receives full reasoning text and handles truncation/expansion in UI
+  - Supports the new expandable "show more" feature in the dashboard
+
+## [0.21.0] - 2025-12-31
+
+### Added
+- **Cost Management System** - On-the-fly cost tracking for trading fees, LLM usage, and server costs
+  - `Costs::Calculator` - Main orchestrator combining all cost types, calculates net P&L
+  - `Costs::TradingFeeCalculator` - Calculates entry/exit fees based on position notional value
+  - `Costs::LLMCostCalculator` - Estimates LLM costs from call counts and token settings
+  - New `costs` section in `config/settings.yml` with configurable fee rates and LLM pricing
+  - Position model gains `entry_fee`, `exit_fee`, `total_fees`, `net_pnl`, `fee_breakdown` methods
+  - Dashboard controller adds `cost_summary` to response
+  - Positions controller adds fee info to all position responses
+  - New `/api/v1/costs` endpoints: `summary`, `llm`, `trading`
+
+### Configuration
+New `costs` section in `config/settings.yml`:
+```yaml
+costs:
+  trading:
+    taker_fee_pct: 0.000450   # 0.0450%
+    maker_fee_pct: 0.000150   # 0.0150%
+    default_order_type: taker
+  server:
+    monthly_cost: 15.00
+  llm:
+    anthropic:
+      claude-haiku-4-5:
+        input_per_million: 1.00
+        output_per_million: 5.00
+```
+
+### Technical Details
+- No database migrations required - all calculations are done on-the-fly
+- LLM costs estimated using 70% utilization factor and 3:1 input/output ratio
+- Hyperliquid fees: 0.0450% taker, 0.0150% maker per transaction
+- 43 new tests for cost services
+
+## [0.20.0] - 2025-12-30
+
+### Added
+- **Hyperliquid Write Operations** - Live trading now supported via EIP-712 signed exchange operations
+  - `HyperliquidClient#place_order` - Places market orders on Hyperliquid with configurable slippage
+  - `HyperliquidClient#cancel_order` - Cancels orders by order ID
+  - `HyperliquidClient#update_leverage` - Placeholder for leverage updates (managed at account level)
+  - SDK now initialized with private key for exchange operations
+  - New `exchange` accessor for write operations via gem's Exchange module
+  - `validate_write_configuration!` helper to check credentials before trading
+
+- **OrderExecutor Live Trade Handling** - Full order lifecycle management for live trades
+  - Processes Hyperliquid order response (status, fill info, order ID)
+  - Creates Order records with proper status transitions (pending → submitted → filled)
+  - Creates/closes Position records based on fill price
+  - Handles error responses from exchange
+
+### Changed
+- `HyperliquidClient` - Updated documentation to reflect write operation support
+- `hyperliquid_client_spec.rb` - Updated tests for actual write operations (no longer stubs)
+
+### Configuration
+New setting `hyperliquid.slippage` in `config/settings.yml`:
+
+### Technical Details
+- Uses forked hyperliquid gem with EIP-712 signing: `github: "marcomd/hyperliquid", branch: "feature/add-eip-712-signing-and-exchange-operations"`
+- Market orders use IoC (Immediate or Cancel) with slippage protection
+- Stop-loss and take-profit monitoring remains local via RiskMonitoringJob (trigger orders planned for future)
+
+### Future Enhancement
+- **Trigger orders for SL/TP on exchange** - Place SL/TP as trigger orders on Hyperliquid for execution even when system is down
+
+## [0.19.0] - 2025-12-30
+
+### Added
+- **Position Direction Evaluation Documentation** - New README section explaining how long/short decisions are made
+  - Documents two-stage process: MacroStrategy sets bias, LowLevelAgent aligns decisions
+  - Includes decision logic table, order mapping, PnL calculation, and SL/TP trigger rules by direction
+  - Confirms both long and short positions are fully supported symmetrically
+
+### Changed
+- **Rebalanced Context Weights** - Technical indicators now primary signal instead of Prophet forecasts
+  - Previous: forecast 60%, sentiment 20%, technical 15%, whale_alerts 5%
+  - New: **technical 50%**, sentiment 25%, forecast 15%, whale_alerts 10%
+  - Rationale: Technical indicators (EMA, RSI, MACD) are proven and based on actual price action
+  - Prophet ML is better suited for business forecasting than volatile crypto markets
+
+## [0.18.3] - 2025-12-30
+
+### Fixed
+- **RiskManager validate_risk_reward Return Type** - `validate_risk_reward` was returning a plain Hash instead of `ValidationResult` struct
+  - `TradingCycleJob` crashed with `undefined method 'approved?' for an instance of Hash`
+  - Changed all `{ valid: true/false, reason: "..." }` returns to `ValidationResult.new(valid: ..., reason: ...)`
+  - Updated internal check from `result[:valid]` to `result.approved?` for consistency
+
+## [0.18.2] - 2025-12-30
+
+### Fixed
+- **Forecasts Page Blank** - Fixed BigDecimal serialization in forecast API responses
+  - `predicted_change_pct` returned BigDecimal which JSON serialized as string
+  - Added `.to_f` conversion in `serialize_forecast` and `serialize_forecast_list` methods
+  - Fixes: `forecast.change_pct.toFixed is not a function` JavaScript error
+
 ## [0.18.1] - 2025-12-30
 
 ### Removed
