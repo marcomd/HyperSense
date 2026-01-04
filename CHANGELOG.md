@@ -2,6 +2,23 @@
 
 All notable changes to HyperSense.
 
+## [0.33.7] - 2026-01-03
+
+### Fixed
+- **Hyperliquid Testnet → Mainnet** - Switched from testnet to mainnet for accurate market prices
+  - Reason: Performance testing capabilities on the testnet have been saturated, as trades were being thwarted by price discrepancies from real ones, which were causing the risk manager (SL and TP) to behave in an unrealistic manner. To continue testing, it is necessary to switch to the mainnet, initially in "paper trading" mode. This fix addresses an issue that occurred in this mode.
+  - Testnet uses simulated prices that diverge significantly from real market
+  - Mainnet prices now align with Binance data (both track real market)
+  - Root cause of false stop-loss triggers (testnet price divergence)
+- **Paper Trading Position Sync** - Positions no longer deleted when paper trading
+  - Added `return if Settings.trading.paper_trading` guard in `TradingCycle#sync_positions_if_configured`
+  - Paper positions now preserved locally instead of being orphaned by exchange sync
+  - Enables safe testing with real mainnet prices without losing paper positions
+
+### Changed
+- `config/settings.yml` - `hyperliquid.testnet: false` (was `true`)
+- `app/services/trading_cycle.rb` - Skip position sync in paper trading mode
+
 ## [0.33.6] - 2026-01-03
 
 ### Added

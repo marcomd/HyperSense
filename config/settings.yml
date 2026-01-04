@@ -93,7 +93,7 @@ llm:
 
 # Hyperliquid Exchange Configuration
 hyperliquid:
-  testnet: true                    # Use testnet by default (safer for development)
+  testnet: false                   # Use mainnet for real market prices (paper_trading handles safety)
   mainnet_url: "https://api.hyperliquid.xyz"
   testnet_url: "https://api.hyperliquid-testnet.xyz"
   retry_attempts: 3                # Number of retry attempts for failed requests
