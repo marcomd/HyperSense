@@ -2,6 +2,33 @@
 
 All notable changes to HyperSense.
 
+## [0.34.0] - 2026-01-04
+
+### Added
+- **Risk Profile System** - User-selectable trading style profiles (Cautious/Moderate/Fearless)
+  - New `risk_profiles` database table with singleton pattern
+  - `RiskProfile` model for profile persistence and switching
+  - `Risk::ProfileService` for centralized profile parameter access
+  - API endpoints: `GET /api/v1/risk_profile/current`, `PUT /api/v1/risk_profile/switch`
+  - WebSocket broadcast for real-time profile updates
+  - Profile-aware settings throughout the trading system
+
+### Changed
+- **Dynamic LLM System Prompt** - RSI thresholds now vary by active risk profile
+  - Cautious: RSI 35-65, 70% confidence, 2x leverage, max 3 positions
+  - Moderate (default): RSI 30-70, 60% confidence, 3x leverage, max 5 positions
+  - Fearless: RSI 25-75, 50% confidence, 5x leverage, max 7 positions
+- **MarketSnapshot** - `rsi_signal` now uses profile-specific thresholds
+- **RiskManager** - All risk parameters now sourced from active profile
+- **ContextAssembler** - Trading context includes active profile name
+- **DashboardController** - Dashboard response includes `risk_profile` object
+
+### Technical Details
+- New files: `app/models/risk_profile.rb`, `app/services/risk/profile_service.rb`, `app/controllers/api/v1/risk_profiles_controller.rb`
+- Updated `config/settings.yml` with `risk_profiles` presets
+- Added `DashboardChannel.broadcast_risk_profile_update` for WebSocket
+- 12 new request specs for risk profile API
+
 ## [0.33.7] - 2026-01-03
 
 ### Fixed

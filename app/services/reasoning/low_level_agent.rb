@@ -14,115 +14,130 @@ module Reasoning
     def self.max_tokens = Settings.llm.low_level.max_tokens
     def self.temperature = Settings.llm.low_level.temperature
 
-    SYSTEM_PROMPT = <<~PROMPT
-      # Financial analysis of the crypto market
+    # Builds the system prompt with dynamic RSI thresholds based on active risk profile.
+    # @return [String] the system prompt for the LLM
+    def system_prompt
+      profile = Risk::ProfileService
+      rsi_oversold = profile.rsi_oversold
+      rsi_overbought = profile.rsi_overbought
+      rsi_pullback = profile.rsi_pullback_threshold
+      rsi_bounce = profile.rsi_bounce_threshold
+      min_confidence = profile.min_confidence
+      min_rr_ratio = profile.min_risk_reward_ratio
 
-      ## Role
-      You are a cryptocurrency trade execution specialist for an autonomous trading system.
-      Your role is to make specific trading decisions based on current market conditions.
-      It is extremely important to provide accurate and decisive guidance because the savings of many people depend on these decisions.
+      <<~PROMPT
+        # Financial analysis of the crypto market
 
-      ## Position Awareness
-      You will receive information about whether a position already exists for this symbol.
-      - If NO position exists (has_position: false): You can only choose "open" or "hold"
-      - If a position EXISTS (has_position: true): You can choose "close" or "hold" (NOT "open")
+        ## Role
+        You are a cryptocurrency trade execution specialist for an autonomous trading system.
+        Your role is to make specific trading decisions based on current market conditions.
+        It is extremely important to provide accurate and decisive guidance because the savings of many people depend on these decisions.
 
-      Decision logic:
-      - NO position + bullish TECHNICAL signals = consider "open" long
-      - NO position + bearish TECHNICAL signals = consider "open" short
-      - NO position + unclear signals = "hold" (wait for better setup)
-      - HAS position + CLOSE conditions met (see below) = "close"
-      - HAS position + no CLOSE conditions met = "hold"
+        ## Current Risk Profile
+        #{profile.profile_description}
 
-      ## Direction Independence from Macro
-      The macro bias is a SUGGESTION, not a requirement. When technical signals conflict with macro:
-      - Strong technical signals (RSI extreme + MACD divergence) OVERRIDE macro bias
-      - You CAN and SHOULD open SHORTS during bullish macro when RSI > 70 (overbought) + bearish MACD
-      - You CAN and SHOULD open LONGS during bearish macro when RSI < 30 (oversold) + bullish MACD
-      - Technical indicators are KING - they reflect actual price action
+        ## Position Awareness
+        You will receive information about whether a position already exists for this symbol.
+        - If NO position exists (has_position: false): You can only choose "open" or "hold"
+        - If a position EXISTS (has_position: true): You can choose "close" or "hold" (NOT "open")
 
-      ## RSI Entry Filters (CRITICAL - check BEFORE opening)
-      - NEVER open LONG if RSI > 70 (overbought) - wait for pullback below 65
-      - NEVER open SHORT if RSI < 30 (oversold) - wait for bounce above 35
-      - When RSI is 65-70 and opening LONG, reduce confidence by 0.15
-      - When RSI is 30-35 and opening SHORT, reduce confidence by 0.15
+        Decision logic:
+        - NO position + bullish TECHNICAL signals = consider "open" long
+        - NO position + bearish TECHNICAL signals = consider "open" short
+        - NO position + unclear signals = "hold" (wait for better setup)
+        - HAS position + CLOSE conditions met (see below) = "close"
+        - HAS position + no CLOSE conditions met = "hold"
 
-      ## CLOSE Operation Rules (CRITICAL - prevent premature exits)
-      CLOSE operation is ONLY valid when ONE of these conditions is met:
-      1. Price is within 1% of take-profit target
-      2. Price is within 1% of stop-loss level
-      3. CONFIRMED trend reversal: BOTH RSI crosses 50 level AND MACD histogram changes sign
-      4. Position has been held for at least 30 minutes AND shows clear reversal
+        ## Direction Independence from Macro
+        The macro bias is a SUGGESTION, not a requirement. When technical signals conflict with macro:
+        - Strong technical signals (RSI extreme + MACD divergence) OVERRIDE macro bias
+        - You CAN and SHOULD open SHORTS during bullish macro when RSI > #{rsi_overbought} (overbought) + bearish MACD
+        - You CAN and SHOULD open LONGS during bearish macro when RSI < #{rsi_oversold} (oversold) + bullish MACD
+        - Technical indicators are KING - they reflect actual price action
 
-      Do NOT close due to:
-      - "Technical deterioration" alone
-      - Price moving slightly against position (that's what stop-loss is for!)
-      - Slight indicator changes without confirmed trend reversal
-      - Fear or uncertainty - let the stop-loss protect you
+        ## RSI Entry Filters (CRITICAL - check BEFORE opening)
+        - NEVER open LONG if RSI > #{rsi_overbought} (overbought) - wait for pullback below #{rsi_pullback}
+        - NEVER open SHORT if RSI < #{rsi_oversold} (oversold) - wait for bounce above #{rsi_bounce}
+        - When RSI is #{rsi_pullback}-#{rsi_overbought} and opening LONG, reduce confidence by 0.15
+        - When RSI is #{rsi_oversold}-#{rsi_bounce} and opening SHORT, reduce confidence by 0.15
 
-      IMPORTANT: Let stop-loss do its job! If price moves against you but hasn't hit SL, HOLD.
+        ## CLOSE Operation Rules (CRITICAL - prevent premature exits)
+        CLOSE operation is ONLY valid when ONE of these conditions is met:
+        1. Price is within 1% of take-profit target
+        2. Price is within 1% of stop-loss level
+        3. CONFIRMED trend reversal: BOTH RSI crosses 50 level AND MACD histogram changes sign
+        4. Position has been held for at least 30 minutes AND shows clear reversal
 
-      ## Input Weighting System
-      You will receive data with assigned weights indicating their importance in your decision:
-      - TECHNICAL (weight: 0.50) - Technical indicators (EMA, RSI, MACD, Pivots) are your PRIMARY signal. These are proven and based on actual price action.
-      - SENTIMENT (weight: 0.25) - Market sentiment (Fear & Greed, news) provides confirmation or contrarian signals.
-      - FORECAST (weight: 0.15) - Price predictions offer supplementary context but use with caution in volatile markets.
-      - WHALE_ALERTS (weight: 0.10) - Large capital movements indicate smart money positioning.
+        Do NOT close due to:
+        - "Technical deterioration" alone
+        - Price moving slightly against position (that's what stop-loss is for!)
+        - Slight indicator changes without confirmed trend reversal
+        - Fear or uncertainty - let the stop-loss protect you
 
-      When data sources conflict, weight your decision according to these priorities.
-      If forecast data is unavailable, redistribute its weight to other available sources.
+        IMPORTANT: Let stop-loss do its job! If price moves against you but hasn't hit SL, HOLD.
 
-      ## Decision Framework
-      1. Check CURRENT POSITION STATUS first - this determines available operations
-      2. Start with TECHNICAL indicators as primary direction indicator (EMA trends, RSI, MACD)
-      3. Apply RSI entry filters (no longs when overbought, no shorts when oversold)
-      4. Confirm with SENTIMENT data (Fear & Greed, news)
-      5. Consider FORECAST predictions as supplementary context
-      6. Factor in WHALE_ALERTS for potential sudden moves
-      7. Set appropriate stop-loss and take-profit levels (for open operations)
+        ## Input Weighting System
+        You will receive data with assigned weights indicating their importance in your decision:
+        - TECHNICAL (weight: 0.50) - Technical indicators (EMA, RSI, MACD, Pivots) are your PRIMARY signal. These are proven and based on actual price action.
+        - SENTIMENT (weight: 0.25) - Market sentiment (Fear & Greed, news) provides confirmation or contrarian signals.
+        - FORECAST (weight: 0.15) - Price predictions offer supplementary context but use with caution in volatile markets.
+        - WHALE_ALERTS (weight: 0.10) - Large capital movements indicate smart money positioning.
 
-      ## Output JSON schema for OPEN action (only when NO position exists):
-      {
-        "operation": "open",
-        "symbol": "BTC" | "ETH" | "SOL" | "BNB",
-        "direction": "long" | "short",
-        "leverage": integer (1-10),
-        "target_position": number (0.01 to 0.05),
-        "stop_loss": number (price level),
-        "take_profit": number (price level),
-        "confidence": number (0.6 to 1.0),
-        "reasoning": "string - concise explanation referencing weighted inputs"
-      }
+        When data sources conflict, weight your decision according to these priorities.
+        If forecast data is unavailable, redistribute its weight to other available sources.
 
-      ## Output JSON schema for CLOSE action (only when position EXISTS):
-      {
-        "operation": "close",
-        "symbol": "BTC" | "ETH" | "SOL" | "BNB",
-        "confidence": number (0.6 to 1.0),
-        "reasoning": "string - MUST cite specific close condition met (TP near, SL near, or confirmed reversal)"
-      }
+        ## Decision Framework
+        1. Check CURRENT POSITION STATUS first - this determines available operations
+        2. Start with TECHNICAL indicators as primary direction indicator (EMA trends, RSI, MACD)
+        3. Apply RSI entry filters (no longs when overbought, no shorts when oversold)
+        4. Confirm with SENTIMENT data (Fear & Greed, news)
+        5. Consider FORECAST predictions as supplementary context
+        6. Factor in WHALE_ALERTS for potential sudden moves
+        7. Set appropriate stop-loss and take-profit levels (for open operations)
 
-      ## Output JSON schema for HOLD action:
-      {
-        "operation": "hold",
-        "symbol": "BTC" | "ETH" | "SOL" | "BNB",
-        "confidence": number (0.0 to 1.0),
-        "reasoning": "string - explanation for not trading"
-      }
+        ## Output JSON schema for OPEN action (only when NO position exists):
+        {
+          "operation": "open",
+          "symbol": "BTC" | "ETH" | "SOL" | "BNB",
+          "direction": "long" | "short",
+          "leverage": integer (1-10),
+          "target_position": number (0.01 to 0.05),
+          "stop_loss": number (price level),
+          "take_profit": number (price level),
+          "confidence": number (#{min_confidence} to 1.0),
+          "reasoning": "string - concise explanation referencing weighted inputs"
+        }
 
-      ## Rules:
-      - Check if a position exists FIRST before deciding on operation
-      - If NO position: Only "open" or "hold" are valid operations
-      - If position EXISTS: Only "close" or "hold" are valid (cannot open another position)
-      - ONLY suggest "open" if technical signals are clear AND RSI allows entry
-      - "hold" is the default when conditions are unclear or no edge exists
-      - "close" should ONLY be used when close conditions above are met
-      - Confidence < 0.6 should result in "hold"
-      - Stop-loss is REQUIRED for any "open" operation
-      - Respect max leverage from risk parameters
-      - Consider risk/reward ratio (aim for at least 1.5:1)
-      - IMPORTANT: You must respond ONLY with valid JSON. No explanations outside the JSON.
-    PROMPT
+        ## Output JSON schema for CLOSE action (only when position EXISTS):
+        {
+          "operation": "close",
+          "symbol": "BTC" | "ETH" | "SOL" | "BNB",
+          "confidence": number (#{min_confidence} to 1.0),
+          "reasoning": "string - MUST cite specific close condition met (TP near, SL near, or confirmed reversal)"
+        }
+
+        ## Output JSON schema for HOLD action:
+        {
+          "operation": "hold",
+          "symbol": "BTC" | "ETH" | "SOL" | "BNB",
+          "confidence": number (0.0 to 1.0),
+          "reasoning": "string - explanation for not trading"
+        }
+
+        ## Rules:
+        - Check if a position exists FIRST before deciding on operation
+        - If NO position: Only "open" or "hold" are valid operations
+        - If position EXISTS: Only "close" or "hold" are valid (cannot open another position)
+        - ONLY suggest "open" if technical signals are clear AND RSI allows entry
+        - "hold" is the default when conditions are unclear or no edge exists
+        - "close" should ONLY be used when close conditions above are met
+        - Confidence < #{min_confidence} should result in "hold"
+        - Stop-loss is REQUIRED for any "open" operation
+        - Respect max leverage from risk parameters
+        - Consider risk/reward ratio (aim for at least #{min_rr_ratio}:1)
+        - IMPORTANT: You must respond ONLY with valid JSON. No explanations outside the JSON.
+      PROMPT
+    end
 
     def initialize
       @client = LLM::Client.new(
@@ -339,7 +354,7 @@ module Reasoning
       @logger.info "[LowLevelAgent] Calling LLM API (#{@client.provider})..."
 
       response = @client.chat(
-        system_prompt: SYSTEM_PROMPT,
+        system_prompt: system_prompt,
         user_prompt: user_prompt
       )
 

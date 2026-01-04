@@ -17,7 +17,8 @@
 #   snapshot.rsi_signal   # => :neutral
 #
 class MarketSnapshot < ApplicationRecord
-  # RSI threshold constants for overbought/oversold signals
+  # RSI threshold defaults (overridden by Risk::ProfileService based on active profile)
+  # Keep constants for backward compatibility and fallback
   RSI_OVERSOLD_THRESHOLD = 30
   RSI_OVERBOUGHT_THRESHOLD = 70
 
@@ -89,18 +90,22 @@ class MarketSnapshot < ApplicationRecord
     price > ema_value
   end
 
-  # Get RSI classification based on standard overbought/oversold levels
+  # Get RSI classification based on current risk profile thresholds.
+  # Thresholds are dynamic based on the active risk profile (cautious/moderate/fearless).
   #
-  # @return [Symbol, nil] :oversold (RSI < 30), :overbought (RSI > 70), :neutral, or nil
+  # @return [Symbol, nil] :oversold, :overbought, :neutral, or nil
   # @example
   #   snapshot.rsi_signal  # => :neutral
   def rsi_signal
     rsi = indicator("rsi_14")
     return nil unless rsi
 
+    oversold = Risk::ProfileService.rsi_oversold
+    overbought = Risk::ProfileService.rsi_overbought
+
     case rsi
-    when 0..RSI_OVERSOLD_THRESHOLD then :oversold
-    when RSI_OVERBOUGHT_THRESHOLD..100 then :overbought
+    when 0..oversold then :oversold
+    when overbought..100 then :overbought
     else :neutral
     end
   end

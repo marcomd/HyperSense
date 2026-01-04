@@ -53,6 +53,40 @@ defaults:
   stop_loss_pct: 0.05            # 5% stop loss
   take_profit_pct: 0.10          # 10% take profit
 
+# Risk Profiles (parameter presets for different trading styles)
+# These override base risk settings when a profile is active
+risk_profiles:
+  cautious:
+    rsi_oversold: 35              # More selective oversold threshold
+    rsi_overbought: 65            # More selective overbought threshold
+    rsi_pullback_threshold: 60    # Wait for RSI below this for long entry
+    rsi_bounce_threshold: 40      # Wait for RSI above this for short entry
+    min_risk_reward_ratio: 2.0    # Require better R/R for trades
+    min_confidence: 0.7           # Higher confidence required
+    max_position_size: 0.03       # 3% max position
+    default_leverage: 2           # Lower leverage
+    max_open_positions: 3         # Fewer concurrent positions
+  moderate:
+    rsi_oversold: 30              # Standard oversold threshold
+    rsi_overbought: 70            # Standard overbought threshold
+    rsi_pullback_threshold: 65    # Standard pullback threshold
+    rsi_bounce_threshold: 35      # Standard bounce threshold
+    min_risk_reward_ratio: 1.5    # Standard R/R requirement
+    min_confidence: 0.6           # Standard confidence
+    max_position_size: 0.05       # 5% max position
+    default_leverage: 3           # Standard leverage
+    max_open_positions: 5         # Standard positions
+  fearless:
+    rsi_oversold: 25              # More aggressive oversold threshold
+    rsi_overbought: 75            # More aggressive overbought threshold
+    rsi_pullback_threshold: 68    # Accept entries at higher RSI
+    rsi_bounce_threshold: 32      # Accept entries at lower RSI
+    min_risk_reward_ratio: 1.2    # Accept lower R/R trades
+    min_confidence: 0.5           # Lower confidence threshold
+    max_position_size: 0.08       # 8% max position
+    default_leverage: 5           # Higher leverage
+    max_open_positions: 7         # More concurrent positions
+
 # Context Weights for Reasoning
 # Technical indicators are the primary signal (proven, based on actual price action)
 # Sentiment provides confirmation/contrarian signals

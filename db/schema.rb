@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_01_02_165238) do
+ActiveRecord::Schema[8.1].define(version: 2026_01_04_110733) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -152,6 +152,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_01_02_165238) do
     t.index ["status"], name: "index_positions_on_status"
     t.index ["symbol", "status"], name: "index_positions_on_symbol_and_status"
     t.index ["symbol"], name: "index_positions_on_symbol"
+  end
+
+  create_table "risk_profiles", force: :cascade do |t|
+    t.string "changed_by", default: "system"
+    t.datetime "created_at", null: false
+    t.string "name", default: "moderate", null: false
+    t.datetime "updated_at", null: false
   end
 
   create_table "trading_decisions", force: :cascade do |t|

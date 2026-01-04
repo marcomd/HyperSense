@@ -306,15 +306,21 @@ module Reasoning
       (Math.sqrt(variance) / mean * 100).round(2)
     end
 
-    # Get risk parameters from settings
+    # Get risk parameters based on current risk profile.
+    # Uses ProfileService to get profile-aware settings.
     # @return [Hash] Risk parameters
     def risk_parameters
+      profile = Risk::ProfileService
       {
-        max_position_size: Settings.risk.max_position_size,
-        min_confidence: Settings.risk.min_confidence,
-        max_leverage: Settings.risk.max_leverage,
-        default_leverage: Settings.risk.default_leverage,
-        max_open_positions: Settings.risk.max_open_positions
+        profile_name: profile.current_name,
+        max_position_size: profile.max_position_size,
+        min_confidence: profile.min_confidence,
+        max_leverage: Settings.risk.max_leverage, # Hard safety limit from settings
+        default_leverage: profile.default_leverage,
+        max_open_positions: profile.max_open_positions,
+        min_risk_reward_ratio: profile.min_risk_reward_ratio,
+        rsi_oversold: profile.rsi_oversold,
+        rsi_overbought: profile.rsi_overbought
       }
     end
 

@@ -80,6 +80,12 @@ Rails.application.routes.draw do
           get :trading
         end
       end
+
+      # Risk Profile Management
+      resource :risk_profile, only: [] do
+        get :current
+        put :switch
+      end
     end
   end
 

@@ -23,7 +23,8 @@ module Api
           macro_strategy: current_macro_strategy,
           recent_decisions: recent_decisions,
           system_status: system_status,
-          cost_summary: cost_summary
+          cost_summary: cost_summary,
+          risk_profile: current_risk_profile
         }
       end
 
@@ -364,6 +365,20 @@ module Api
           margin_used: nil,
           positions_count: nil,
           configured: false
+        }
+      end
+
+      # Build current risk profile data for dashboard display
+      #
+      # Returns the active risk profile name and its parameters.
+      #
+      # @return [Hash] Risk profile with name, parameters, and metadata
+      def current_risk_profile
+        profile = RiskProfile.current
+        {
+          name: profile.name,
+          parameters: Risk::ProfileService.current_params,
+          updated_at: profile.updated_at.iso8601
         }
       end
     end

@@ -20,8 +20,9 @@ module Risk
   #   end
   #
   class RiskManager
-    # Default fallback for minimum risk/reward ratio (lowered from 2.0 to allow more trades)
+    # Default fallback for minimum risk/reward ratio (used when ProfileService unavailable)
     DEFAULT_MIN_RISK_REWARD_RATIO = 1.5
+    DEFAULT_MIN_CONFIDENCE = 0.6
 
     # Result object for validation checks
     ValidationResult = Struct.new(:valid, :reason, keyword_init: true) do
@@ -132,7 +133,7 @@ module Risk
     private
 
     def validate_confidence(decision)
-      min_confidence = Settings.risk.min_confidence
+      min_confidence = ProfileService.min_confidence
       confidence = decision.confidence || 0
 
       if confidence < min_confidence
@@ -146,8 +147,10 @@ module Risk
     end
 
     def validate_leverage(decision)
+      # Keep max_leverage from Settings as a hard safety limit
       max_leverage = Settings.risk.max_leverage
-      leverage = decision.leverage || Settings.risk.default_leverage
+      # Use profile-based default leverage
+      leverage = decision.leverage || ProfileService.default_leverage
 
       if leverage > max_leverage
         ValidationResult.new(
@@ -160,7 +163,7 @@ module Risk
     end
 
     def validate_position_limit
-      max_positions = Settings.risk.max_open_positions
+      max_positions = ProfileService.max_open_positions
       current_count = @position_manager.open_positions_count
 
       if current_count >= max_positions
@@ -182,9 +185,9 @@ module Risk
         )
       end
 
-      # Check margin availability
-      size = decision.target_position || Settings.risk.max_position_size
-      leverage = decision.leverage || Settings.risk.default_leverage
+      # Check margin availability using profile-based settings
+      size = decision.target_position || ProfileService.max_position_size
+      leverage = decision.leverage || ProfileService.default_leverage
       margin_required = @account_manager.margin_for_position(
         size: size, price: entry_price, leverage: leverage
       )
@@ -215,7 +218,7 @@ module Risk
     end
 
     def min_risk_reward_ratio
-      Settings.risk.try(:min_risk_reward_ratio) || DEFAULT_MIN_RISK_REWARD_RATIO
+      ProfileService.min_risk_reward_ratio
     end
   end
 end

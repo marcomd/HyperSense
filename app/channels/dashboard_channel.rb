@@ -8,6 +8,7 @@
 #   - decision_update: New trading decisions
 #   - macro_strategy_update: New macro strategy
 #   - system_status_update: System health changes
+#   - risk_profile_update: Risk profile changes (cautious/moderate/fearless)
 #
 class DashboardChannel < ApplicationCable::Channel
   def subscribed
@@ -58,6 +59,19 @@ class DashboardChannel < ApplicationCable::Channel
       ActionCable.server.broadcast("dashboard", {
         type: "system_status_update",
         data: status,
+        timestamp: Time.current.iso8601
+      })
+    end
+
+    def broadcast_risk_profile_update(profile)
+      ActionCable.server.broadcast("dashboard", {
+        type: "risk_profile_update",
+        data: {
+          name: profile.name,
+          changed_by: profile.changed_by,
+          parameters: Risk::ProfileService.current_params,
+          updated_at: profile.updated_at.iso8601
+        },
         timestamp: Time.current.iso8601
       })
     end
