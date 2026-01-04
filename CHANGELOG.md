@@ -2,6 +2,23 @@
 
 All notable changes to HyperSense.
 
+## [0.36.0] - 2026-01-04
+
+### Added
+- **Capital % ROI in Dashboard** - Account Summary now returns return on initial capital percentage
+  - New `capital_pnl_percent` field in dashboard API response
+  - Calculates ROI as `(calculated_pnl / initial_balance) * 100`
+  - Returns `nil` when initial_balance is not available or zero
+  - 4 new request specs for capital_pnl_percent edge cases
+
+### Fixed
+- **Balance Sync in Paper Trading** - Balance sync now runs in paper trading mode
+  - Previously, both balance sync and position sync were skipped in paper trading
+  - Now only position sync is skipped (to preserve paper positions)
+  - This allows initial_balance to be recorded for ROI calculation
+
+### Supports Frontend (0.18.0)
+
 ## [0.35.0] - 2026-01-04
 
 ### Added

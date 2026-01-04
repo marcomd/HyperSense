@@ -138,6 +138,80 @@ RSpec.describe "Api::V1::Dashboard", type: :request do
 
       expect(account["volatility_info"]).to be_nil
     end
+
+    context "capital_pnl_percent calculation" do
+      it "calculates capital percentage when balance history is present" do
+        # Mock balance history with initial balance
+        allow_any_instance_of(Execution::BalanceSyncService).to receive(:balance_history).and_return({
+          initial_balance: 1000.0,
+          calculated_pnl: 150.0,
+          total_deposits: 0,
+          total_withdrawals: 0,
+          last_sync: Time.current
+        })
+
+        get "/api/v1/dashboard"
+
+        json = response.parsed_body
+        account = json["account"]
+
+        # 150 / 1000 * 100 = 15%
+        expect(account).to have_key("capital_pnl_percent")
+        expect(account["capital_pnl_percent"]).to eq(15.0)
+      end
+
+      it "returns nil capital_pnl_percent when initial_balance is nil" do
+        allow_any_instance_of(Execution::BalanceSyncService).to receive(:balance_history).and_return({
+          initial_balance: nil,
+          calculated_pnl: 150.0,
+          total_deposits: 0,
+          total_withdrawals: 0,
+          last_sync: Time.current
+        })
+
+        get "/api/v1/dashboard"
+
+        json = response.parsed_body
+        account = json["account"]
+
+        expect(account["capital_pnl_percent"]).to be_nil
+      end
+
+      it "returns nil capital_pnl_percent when initial_balance is zero" do
+        allow_any_instance_of(Execution::BalanceSyncService).to receive(:balance_history).and_return({
+          initial_balance: 0,
+          calculated_pnl: 150.0,
+          total_deposits: 0,
+          total_withdrawals: 0,
+          last_sync: Time.current
+        })
+
+        get "/api/v1/dashboard"
+
+        json = response.parsed_body
+        account = json["account"]
+
+        expect(account["capital_pnl_percent"]).to be_nil
+      end
+
+      it "handles negative capital_pnl_percent correctly" do
+        allow_any_instance_of(Execution::BalanceSyncService).to receive(:balance_history).and_return({
+          initial_balance: 1000.0,
+          calculated_pnl: -250.0,
+          total_deposits: 0,
+          total_withdrawals: 0,
+          last_sync: Time.current
+        })
+
+        get "/api/v1/dashboard"
+
+        json = response.parsed_body
+        account = json["account"]
+
+        # -250 / 1000 * 100 = -25%
+        expect(account["capital_pnl_percent"]).to eq(-25.0)
+      end
+    end
   end
 
   describe "GET /api/v1/dashboard/account" do

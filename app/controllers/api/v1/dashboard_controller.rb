@@ -52,7 +52,8 @@ module Api
       #
       # @return [Hash] Account summary with keys :open_positions_count, :total_unrealized_pnl,
       #   :total_margin_used, :realized_pnl_today, :paper_trading, :circuit_breaker, :volatility_info,
-      #   :total_realized_pnl, :all_time_pnl, :calculated_pnl, :balance_history, :hyperliquid, :testnet_mode
+      #   :total_realized_pnl, :all_time_pnl, :calculated_pnl, :capital_pnl_percent, :balance_history,
+      #   :hyperliquid, :testnet_mode
       def account_summary
         open_positions = Position.open
 
@@ -70,6 +71,12 @@ module Api
         # Get calculated PnL that accounts for deposits/withdrawals
         balance_service = Execution::BalanceSyncService.new
         balance_history_data = balance_service.balance_history
+
+        # Calculate capital percentage (ROI on initial capital)
+        initial_balance = balance_history_data[:initial_balance]
+        capital_pnl_percent = if initial_balance && initial_balance > 0 && balance_history_data[:calculated_pnl]
+                                (balance_history_data[:calculated_pnl] / initial_balance * 100).round(2)
+        end
 
         # Get circuit breaker status
         circuit_breaker = Risk::CircuitBreaker.new if defined?(Risk::CircuitBreaker)
@@ -89,6 +96,7 @@ module Api
           total_realized_pnl: total_realized_pnl.round(2),
           all_time_pnl: all_time_pnl.round(2),
           calculated_pnl: balance_history_data[:calculated_pnl]&.round(2),
+          capital_pnl_percent: capital_pnl_percent,
           balance_history: {
             initial_balance: balance_history_data[:initial_balance]&.round(2),
             total_deposits: balance_history_data[:total_deposits]&.round(2),

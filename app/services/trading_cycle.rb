@@ -77,19 +77,21 @@ class TradingCycle
   # Fetches current positions and account balance from the exchange and
   # updates local database. Balance sync detects deposits/withdrawals
   # for accurate PnL calculation.
-  # Skipped in paper trading mode to preserve local paper positions.
+  # In paper trading mode: balance sync runs (for ROI tracking), position sync skipped.
   # Silently handles API errors to avoid disrupting the trading cycle.
   #
   # @return [void]
   def sync_positions_if_configured
     client = Execution::HyperliquidClient.new
     return unless client.configured?
-    return if Settings.trading.paper_trading
 
-    # Sync balance first (for accurate PnL tracking)
+    # Sync balance first (for accurate PnL tracking) - always runs
     sync_balance(client)
 
-    # Sync positions
+    # Skip position sync in paper trading mode to preserve local paper positions
+    return if Settings.trading.paper_trading
+
+    # Sync positions from exchange
     @logger.info "[TradingCycle] Syncing positions from Hyperliquid..."
     @position_manager.sync_from_hyperliquid
     @position_manager.update_prices
