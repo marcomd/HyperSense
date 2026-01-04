@@ -209,6 +209,7 @@ module Api
             status: d.status,
             reasoning: d.reasoning,
             volatility_level: d.volatility_level,
+            risk_profile_name: d.risk_profile_name,
             llm_model: d.llm_model,
             created_at: d.created_at.iso8601
           }

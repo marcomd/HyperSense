@@ -375,7 +375,8 @@ module Reasoning
           direction: data[:direction],
           confidence: data[:confidence],
           status: "pending",
-          llm_model: @client.model
+          llm_model: @client.model,
+          risk_profile_name: RiskProfile.current_name
         )
       else
         @logger.warn "[LowLevelAgent] Invalid response for #{symbol}: #{parsed[:errors].join(', ')}"
@@ -389,7 +390,8 @@ module Reasoning
           confidence: 0.0,
           status: "rejected",
           rejection_reason: "Invalid LLM response: #{parsed[:errors].join(', ')}",
-          llm_model: @client.model
+          llm_model: @client.model,
+          risk_profile_name: RiskProfile.current_name
         )
       end
     end
@@ -405,7 +407,8 @@ module Reasoning
         confidence: 0.0,
         status: "rejected",
         rejection_reason: error_message,
-        llm_model: @client.model
+        llm_model: @client.model,
+        risk_profile_name: RiskProfile.current_name
       )
     end
 

@@ -113,6 +113,7 @@ module Api
           volatility_level: decision.volatility_level,
           atr_value: decision.atr_value&.to_f,
           next_cycle_interval: decision.next_cycle_interval,
+          risk_profile_name: decision.risk_profile_name,
           created_at: decision.created_at.iso8601
         }
 

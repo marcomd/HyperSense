@@ -1,6 +1,6 @@
 # HyperSense
 
-**Version 0.34.0** | Autonomous AI Trading Agent for cryptocurrency markets.
+**Version 0.35.0** | Autonomous AI Trading Agent for cryptocurrency markets.
 
 ![HyperSense_cover1.jpg](docs/HyperSense_cover1.jpg)
 
@@ -8,11 +8,14 @@
 
 HyperSense is an autonomous trading agent that operates in discrete cycles to analyze market data and execute trades on decentralized exchanges (DEX). It uses Claude AI for reasoning and decision-making.
 
+**note**: this is the backend, go here for the [HyperSense Dashboard](https://github.com/marcomd/HyperSenseDashboard/)
+
 ### Key Features
 
 - **Autonomous Operation**: Dynamic scheduling based on market volatility (3-25 minutes)
 - **Multi-Agent Architecture**: High-level (macro strategy) + Low-level (trade execution) agents
 - **Technical Analysis**: EMA, RSI, MACD, ATR (volatility), Pivot Points
+- **Risk Profiles**: User-selectable trading styles (Cautious/Moderate/Fearless) with different parameters
 - **Risk Management**: Position sizing, stop-loss, take-profit, confidence scoring
 - **Cost Tracking**: On-the-fly calculation of trading fees, LLM costs, and server costs with net P&L
 - **Real-time Dashboard**: React frontend with routing, filters, and detail pages
@@ -685,6 +688,67 @@ risk:
   max_consecutive_losses: 3      # Consecutive losses before halt
   circuit_breaker_cooldown: 24   # Hours to wait after trigger
 ```
+
+### 5.1 Risk Profiles (Cautious / Moderate / Fearless)
+
+Risk Profiles allow users to adjust the trading agent's behavior based on their risk tolerance. Each profile defines different parameters for RSI thresholds, minimum confidence, leverage, and position limits.
+
+**Available Profiles:**
+
+| Profile | RSI Oversold | RSI Overbought | Min Confidence | Default Leverage | Max Positions |
+|---------|--------------|----------------|----------------|------------------|---------------|
+| **Cautious** | 35 | 65 | 70% | 2x | 3 |
+| **Moderate** (default) | 30 | 70 | 60% | 3x | 5 |
+| **Fearless** | 25 | 75 | 50% | 5x | 7 |
+
+**How Profiles Affect Trading:**
+
+- **RSI Thresholds**: Define when an asset is considered oversold (buy signal) or overbought (sell signal)
+- **Min Confidence**: LLM decisions below this threshold are rejected
+- **Default Leverage**: Applied when the LLM doesn't specify leverage
+- **Max Positions**: Limits concurrent open positions
+
+**API Endpoints:**
+
+```ruby
+# Get current profile
+GET /api/v1/risk_profile/current
+# => { name: "moderate", parameters: { rsi_oversold: 30, ... }, updated_at: "..." }
+
+# Switch profile
+PUT /api/v1/risk_profile/switch
+# Body: { profile: "fearless" }
+# => { name: "fearless", parameters: { ... }, updated_at: "..." }
+```
+
+**Code Usage:**
+
+```ruby
+# Get current profile parameters
+RiskProfile.current_name        # => "moderate"
+RiskProfile.current_parameters  # => { rsi_oversold: 30, rsi_overbought: 70, ... }
+
+# Access via ProfileService (used throughout the system)
+Risk::ProfileService.current_name           # => "moderate"
+Risk::ProfileService.rsi_oversold           # => 30
+Risk::ProfileService.min_confidence         # => 0.6
+Risk::ProfileService.default_leverage       # => 3
+Risk::ProfileService.max_open_positions     # => 5
+
+# Switch profile
+RiskProfile.switch_to!("fearless")
+```
+
+**Audit Trail:**
+
+Each trading decision stores the active profile name at creation time (`risk_profile_name` column). This enables:
+- Debugging decisions made under different profiles
+- Analyzing performance by profile
+- Understanding agent behavior when profiles are switched mid-session
+
+**WebSocket Updates:**
+
+When a profile is switched, a `risk_profile_update` message is broadcast to all connected dashboard clients, enabling real-time UI updates.
 
 ### 6. Risk Monitoring (RiskMonitoringJob - every minute)
 

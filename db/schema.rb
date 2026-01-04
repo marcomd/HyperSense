@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_01_04_110733) do
+ActiveRecord::Schema[8.1].define(version: 2026_01_04_130454) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -175,6 +175,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_01_04_110733) do
     t.string "operation"
     t.jsonb "parsed_decision", default: {}
     t.string "rejection_reason"
+    t.string "risk_profile_name", default: "moderate"
     t.string "status", default: "pending"
     t.string "symbol", null: false
     t.datetime "updated_at", null: false

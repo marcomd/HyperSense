@@ -2,6 +2,17 @@
 
 All notable changes to HyperSense.
 
+## [0.35.0] - 2026-01-04
+
+### Added
+- **Risk Profile Audit Trail** - Trading decisions now store which risk profile was active at creation time
+  - New `risk_profile_name` column on `trading_decisions` table (default: `moderate`)
+  - `LowLevelAgent` saves profile name when creating decisions
+  - `DecisionsController` serializes `risk_profile_name` in API responses
+  - Enables debugging when users switch profiles mid-session
+
+### Supports Frontend (0.16.1)
+
 ## [0.34.0] - 2026-01-04
 
 ### Added

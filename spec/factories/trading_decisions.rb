@@ -27,6 +27,7 @@ FactoryBot.define do
     executed { false }
     status { "pending" }
     llm_model { "claude-sonnet-4-5" }
+    risk_profile_name { "moderate" }
 
     trait :hold do
       operation { "hold" }
