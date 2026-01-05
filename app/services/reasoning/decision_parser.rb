@@ -139,24 +139,49 @@ module Reasoning
 
       private
 
-      # Extract JSON from LLM response (handles markdown code blocks)
-      # @param response [String] Raw response
-      # @return [Hash, nil] Parsed JSON hash or nil
+      # Extract JSON from LLM response (handles markdown code blocks and surrounding text)
+      #
+      # Attempts multiple strategies to extract valid JSON:
+      # 1. Direct parse (cleanest case - response is pure JSON)
+      # 2. Markdown code block extraction (```json ... ```)
+      # 3. Regex extraction of JSON object from surrounding text
+      #
+      # @param response [String] Raw response from LLM
+      # @return [Hash, nil] Parsed JSON hash or nil if extraction fails
       def extract_json(response)
         return nil if response.nil? || response.empty?
 
         text = response.to_s.strip
 
-        # Remove markdown code block if present
-        if text.start_with?("```")
-          # Handle ```json or just ```
-          text = text.gsub(/\A```(?:json)?\s*\n?/, "").gsub(/\n?\s*```\z/, "")
+        # Strategy 1: Try direct parse (cleanest case)
+        begin
+          return Oj.load(text, symbol_keys: false, mode: :compat)
+        rescue Oj::ParseError, EncodingError
+          # Fall through to other strategies
         end
 
-        # Use Oj for fast JSON parsing with symbol keys as strings
-        Oj.load(text, symbol_keys: false, mode: :compat)
-      rescue Oj::ParseError, JSON::ParserError => e
+        # Strategy 2: Remove markdown code block if present
+        if text.include?("```")
+          # Extract content between code fences
+          code_block_match = text.match(/```(?:json)?\s*\n?(.*?)\n?\s*```/m)
+          if code_block_match
+            begin
+              return Oj.load(code_block_match[1].strip, symbol_keys: false, mode: :compat)
+            rescue Oj::ParseError, EncodingError
+              # Fall through to regex extraction
+            end
+          end
+        end
+
+        # Strategy 3: Extract JSON object from surrounding text
+        # Match outermost { ... } handling up to 3 levels of nested braces
+        json_match = text.match(/\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\}/m)
+        return nil unless json_match
+
+        Oj.load(json_match[0], symbol_keys: false, mode: :compat)
+      rescue Oj::ParseError, EncodingError, JSON::ParserError => e
         Rails.logger.error "[DecisionParser] JSON parse error: #{e.message}"
+        Rails.logger.error "[DecisionParser] Raw response (truncated): #{response[0..500]}"
         nil
       end
 

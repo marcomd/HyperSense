@@ -6,9 +6,10 @@
 # 1. Check circuit breaker (halt if triggered)
 # 2. Sync positions from Hyperliquid
 # 3. Check/refresh macro strategy
-# 4. Run low-level agent for all assets
-# 5. Filter and approve decisions (using RiskManager)
-# 6. Execute approved trades
+# 4. Verify data readiness (blocks if critical data missing)
+# 5. Run low-level agent for all assets
+# 6. Filter and approve decisions (using RiskManager)
+# 7. Execute approved trades
 #
 # @example
 #   cycle = TradingCycle.new
@@ -27,6 +28,7 @@ class TradingCycle
     @risk_manager = Risk::RiskManager.new
     @position_sizer = Risk::PositionSizer.new
     @circuit_breaker = Risk::CircuitBreaker.new
+    @readiness_checker = Risk::ReadinessChecker.new
   end
 
   # Execute the full trading cycle
@@ -50,20 +52,27 @@ class TradingCycle
     # Step 2: Ensure we have a valid macro strategy
     ensure_macro_strategy
 
-    # Step 3: Get current macro strategy
+    # Step 3: Check data readiness (blocks trading if critical data is missing)
+    readiness = @readiness_checker.check
+    unless readiness.ready?
+      @logger.warn "[TradingCycle] Data not ready for trading: #{readiness.reason}"
+      return []
+    end
+
+    # Step 4: Get current macro strategy
     macro_strategy = MacroStrategy.active
     @logger.info "[TradingCycle] Using macro strategy: #{macro_strategy&.bias || 'none'}"
 
-    # Step 4: Run low-level agent for all assets
+    # Step 5: Run low-level agent for all assets
     decisions = run_low_level_agent(macro_strategy)
 
-    # Step 5: Log decisions
+    # Step 6: Log decisions
     log_decisions(decisions)
 
-    # Step 6: Filter and approve actionable decisions
+    # Step 7: Filter and approve actionable decisions
     approved = filter_and_approve(decisions)
 
-    # Step 7: Execute approved trades
+    # Step 8: Execute approved trades
     execute_decisions(approved)
 
     @logger.info "[TradingCycle] Execution complete"

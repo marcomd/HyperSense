@@ -36,6 +36,18 @@ FactoryBot.define do
       valid_until { 1.hour.ago }
     end
 
+    trait :active do
+      valid_until { 24.hours.from_now }
+    end
+
+    trait :fallback do
+      market_narrative { "Unable to parse LLM response. Defaulting to neutral stance." }
+      bias { "neutral" }
+      risk_tolerance { 0.5 }
+      key_levels { {} }
+      valid_until { 6.hours.from_now }
+    end
+
     trait :conservative do
       risk_tolerance { 0.2 }
     end

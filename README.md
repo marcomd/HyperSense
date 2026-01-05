@@ -1215,8 +1215,8 @@ calculated_pnl = current_balance - initial_balance - total_deposits + total_with
 - [x] CostSummaryCard component (Trading fee, LLM cost estimation etc.)
 
 ### Phase 7: Production
-- [ ] Dockerfile
-- [ ] docker-compose.production.yml
+- [x] Dockerfile (backend + frontend)
+- [x] docker-compose.yml (full stack orchestration)
 - [ ] Monitoring/alerting
 
 ---
@@ -1318,33 +1318,68 @@ const markets = cable.subscriptions.create({ channel: "MarketsChannel", symbol: 
 - **Pagination** - Page navigation with size selector
 - **DataTable** - Generic table with loading skeleton, empty state, expandable rows
 
-### Phase 7: Production (TODO)
+### Phase 7: Production (Completed)
 
-**docker-compose.production.yml:**
+**Docker Setup:**
+
+Run the full stack with a single command:
+
+```bash
+# Setup
+cp .env.docker.example .env
+# Edit .env with your API keys and RAILS_MASTER_KEY
+
+# Run
+docker compose up -d --build
+
+# Access
+http://localhost
+
+# Logs
+docker compose logs -f
+
+# Stop
+docker compose down
+```
+
+**docker-compose.yml** (at project root):
 ```yaml
 services:
-  app:
-    build: ./backend
-    environment:
-      - RAILS_ENV=production
-      - DATABASE_URL=postgres://db:5432/hypersense
-    ports:
-      - "3001:3000"
-
-  solid_queue:
-    build: ./backend
-    command: bundle exec rails solid_queue:start
-
-  frontend:
-    build: ./frontend
-    ports:
-      - "3000:80"
-
   db:
     image: postgres:16
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./backend/docker/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hypersense"]
+
+  backend:
+    build: ./backend
+    environment:
+      RAILS_ENV: production
+      SOLID_QUEUE_IN_PUMA: "false"
+    depends_on:
+      db: { condition: service_healthy }
+
+  worker:
+    build: ./backend
+    command: ["./bin/jobs"]
+    depends_on:
+      backend: { condition: service_healthy }
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "80:80"
+    depends_on:
+      backend: { condition: service_healthy }
 ```
+
+**Architecture:**
+- **db**: PostgreSQL 16 with multi-database init (primary, cache, queue, cable)
+- **backend**: Rails API via Thruster (port 80 internal)
+- **worker**: Solid Queue background jobs
+- **frontend**: React SPA via Nginx with API/WebSocket proxy
 
 **Recommended VPS:** 2GB RAM minimum (DigitalOcean, Hetzner, Linode)
 

@@ -80,6 +80,62 @@ RSpec.describe Reasoning::DecisionParser do
       end
     end
 
+    context "with JSON wrapped in explanatory text" do
+      let(:response_with_prefix) do
+        <<~RESPONSE
+          Here's my analysis of the current market conditions:
+
+          {"operation": "hold", "symbol": "BTC", "confidence": 0.65, "reasoning": "Market consolidating near key levels"}
+
+          Let me know if you need more details.
+        RESPONSE
+      end
+
+      it "extracts JSON from surrounding text" do
+        result = described_class.parse_trading_decision(response_with_prefix)
+        expect(result[:valid]).to be true
+        expect(result[:data][:operation]).to eq("hold")
+        expect(result[:data][:confidence]).to eq(0.65)
+      end
+    end
+
+    context "with JSON after explanatory text" do
+      let(:response_with_prefix) do
+        "Based on my analysis: {\"operation\": \"hold\", \"symbol\": \"ETH\", \"confidence\": 0.55, \"reasoning\": \"Mixed signals\"}"
+      end
+
+      it "extracts JSON after prefix text" do
+        result = described_class.parse_trading_decision(response_with_prefix)
+        expect(result[:valid]).to be true
+        expect(result[:data][:symbol]).to eq("ETH")
+      end
+    end
+
+    context "with nested JSON objects" do
+      let(:nested_json_response) do
+        <<~RESPONSE
+          Here's the analysis:
+          {
+            "operation": "open",
+            "symbol": "BTC",
+            "direction": "long",
+            "leverage": 3,
+            "stop_loss": 95000,
+            "take_profit": 105000,
+            "confidence": 0.75,
+            "reasoning": "Strong setup with nested data"
+          }
+        RESPONSE
+      end
+
+      it "extracts nested JSON correctly" do
+        result = described_class.parse_trading_decision(nested_json_response)
+        expect(result[:valid]).to be true
+        expect(result[:data][:operation]).to eq("open")
+        expect(result[:data][:stop_loss]).to eq(95_000)
+      end
+    end
+
     context "with invalid JSON" do
       let(:invalid_json) { "not valid json {" }
 
@@ -278,6 +334,43 @@ RSpec.describe Reasoning::DecisionParser do
         result = described_class.parse_macro_strategy(markdown_response)
         expect(result[:valid]).to be true
         expect(result[:data][:bias]).to eq("neutral")
+      end
+    end
+
+    context "with JSON wrapped in explanatory text" do
+      let(:response_with_text) do
+        <<~RESPONSE
+          Based on my comprehensive analysis of the current market conditions:
+
+          {
+            "market_narrative": "Bitcoin showing strength with bullish momentum across major assets.",
+            "bias": "bullish",
+            "risk_tolerance": 0.65,
+            "key_levels": {"BTC": {"support": [95000], "resistance": [100000]}},
+            "reasoning": "Technical indicators align with positive sentiment"
+          }
+
+          This strategy should be reviewed at the next macro cycle.
+        RESPONSE
+      end
+
+      it "extracts JSON from surrounding explanatory text" do
+        result = described_class.parse_macro_strategy(response_with_text)
+        expect(result[:valid]).to be true
+        expect(result[:data][:bias]).to eq("bullish")
+        expect(result[:data][:risk_tolerance]).to eq(0.65)
+      end
+    end
+
+    context "with JSON after prefix text" do
+      let(:response_with_prefix) do
+        'Here is my analysis: {"market_narrative": "Market is bearish with declining momentum.", "bias": "bearish", "risk_tolerance": 0.3, "key_levels": {}, "reasoning": "Strong downtrend"}'
+      end
+
+      it "extracts JSON after prefix" do
+        result = described_class.parse_macro_strategy(response_with_prefix)
+        expect(result[:valid]).to be true
+        expect(result[:data][:bias]).to eq("bearish")
       end
     end
 

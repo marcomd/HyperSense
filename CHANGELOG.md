@@ -2,6 +2,51 @@
 
 All notable changes to HyperSense.
 
+## [0.37.0] - 2026-01-05
+
+### Added
+- **Data Readiness Checker** - Trading is now blocked unless all critical data sources are available
+  - New `Risk::ReadinessChecker` service validates data before trading decisions
+  - Checks: valid MacroStrategy (not fallback), forecasts exist, fresh market data (<5 min), sentiment data
+  - Configurable via `config/settings.yml` under `readiness:` section
+  - Prevents trading with incomplete context when system is freshly deployed
+  - 12 new tests for ReadinessChecker service
+
+### Fixed
+- **LLM JSON Extraction** - Improved JSON parsing to handle responses wrapped in explanatory text
+  - `DecisionParser.extract_json` now uses 3-strategy approach: direct parse, code block extraction, regex extraction
+  - Handles cases where LLM returns `"Here's my analysis: {...}"` instead of pure JSON
+  - Added `EncodingError` to rescue clause (Oj raises this instead of ParseError in some cases)
+  - 5 new test cases for JSON extraction from surrounding text
+
+- **HighLevelAgent Retry Logic** - Added retry on parse failure to reduce fallback neutral strategies
+  - Retries LLM call up to 2 times if JSON parsing fails
+  - Logs warning on each retry attempt with error details
+  - Only falls back to neutral strategy after all retries exhausted
+
+### Changed
+- **TradingCycle Workflow** - Added Step 3 (readiness check) between macro strategy refresh and running agents
+  - Returns empty decisions if data not ready (similar to circuit breaker behavior)
+  - Logs warning with specific missing data items
+
+### Configuration
+New `readiness` section in `config/settings.yml`:
+```yaml
+readiness:
+  require_macro_strategy: true    # Require valid macro strategy
+  require_forecasts: true         # Require at least one asset has recent forecasts
+  require_fresh_market_data: true # Require recent market snapshots
+  require_sentiment: true         # Require Fear & Greed sentiment data
+  market_data_max_age_minutes: 5  # Market snapshots must be newer than this
+  forecast_max_age_hours: 1       # Forecasts must be newer than this
+```
+
+### Technical Details
+- New files: `app/services/risk/readiness_checker.rb`, `spec/services/risk/readiness_checker_spec.rb`
+- Updated: `app/services/reasoning/decision_parser.rb`, `app/services/reasoning/high_level_agent.rb`, `app/services/trading_cycle.rb`
+- New factory traits: `:active`, `:fallback` for `macro_strategy` factory
+- All 41 new/updated tests passing
+
 ## No version - 2026-01-05
 
 ### Changed

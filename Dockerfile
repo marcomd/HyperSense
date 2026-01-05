@@ -15,8 +15,9 @@ FROM docker.io/library/ruby:$RUBY_VERSION-slim AS base
 WORKDIR /rails
 
 # Install base packages
+# libsecp256k1-1 is required at runtime for rbsecp256k1 gem (used by hyperliquid/eth)
 RUN apt-get update -qq && \
-    apt-get install --no-install-recommends -y curl libjemalloc2 postgresql-client && \
+    apt-get install --no-install-recommends -y curl libjemalloc2 postgresql-client libsecp256k1-1 && \
     ln -s /usr/lib/$(uname -m)-linux-gnu/libjemalloc.so.2 /usr/local/lib/libjemalloc.so && \
     rm -rf /var/lib/apt/lists /var/cache/apt/archives
 
@@ -31,13 +32,16 @@ ENV RAILS_ENV="production" \
 FROM base AS build
 
 # Install packages needed to build gems
+# rbsecp256k1 gem builds libsecp256k1 from source, requiring autoconf/automake/libtool
 RUN apt-get update -qq && \
-    apt-get install --no-install-recommends -y build-essential git libpq-dev libyaml-dev pkg-config && \
+    apt-get install --no-install-recommends -y build-essential git libpq-dev libyaml-dev pkg-config \
+    autoconf automake libtool && \
     rm -rf /var/lib/apt/lists /var/cache/apt/archives
 
 # Install application gems
 COPY Gemfile Gemfile.lock vendor ./
 
+# Install gems (rbsecp256k1 builds libsecp256k1 from source)
 RUN bundle install && \
     rm -rf ~/.bundle/ "${BUNDLE_PATH}"/ruby/*/cache "${BUNDLE_PATH}"/ruby/*/bundler/gems/*/.git && \
     # -j 1 disable parallel compilation to avoid a QEMU bug: https://github.com/rails/bootsnap/issues/495
@@ -51,7 +55,12 @@ COPY . .
 RUN bundle exec bootsnap precompile -j 1 app/ lib/
 
 # Precompile Mission Control assets for production
-RUN SECRET_KEY_BASE_DUMMY=1 ./bin/rails assets:precompile
+# Set dummy database variables since production config requires them
+RUN SECRET_KEY_BASE_DUMMY=1 \
+    DATABASE_HOST=localhost \
+    DATABASE_USER=dummy \
+    DATABASE_PASSWORD=dummy \
+    ./bin/rails assets:precompile
 
 
 

@@ -66,7 +66,10 @@ module Reasoning
       @context_assembler = ContextAssembler.new
     end
 
-    # Generate macro strategy analysis
+    MAX_PARSE_ATTEMPTS = 2
+
+    # Generate macro strategy analysis with retry logic for parse failures
+    #
     # @return [MacroStrategy, nil] Created macro strategy record or nil on API error
     def analyze
       @logger.info "[HighLevelAgent] Starting macro analysis..."
@@ -74,14 +77,29 @@ module Reasoning
       context = @context_assembler.for_macro_analysis
       user_prompt = build_user_prompt(context)
 
-      response = call_llm(user_prompt)
-      parsed = DecisionParser.parse_macro_strategy(response)
+      attempts = 0
+      last_response = nil
+      last_errors = []
 
-      if parsed[:valid]
-        create_strategy(parsed[:data], context, response)
-      else
-        handle_invalid_response(parsed[:errors], context, response)
+      while attempts < MAX_PARSE_ATTEMPTS
+        attempts += 1
+        last_response = call_llm(user_prompt)
+        parsed = DecisionParser.parse_macro_strategy(last_response)
+
+        if parsed[:valid]
+          return create_strategy(parsed[:data], context, last_response)
+        end
+
+        last_errors = parsed[:errors]
+
+        if attempts < MAX_PARSE_ATTEMPTS
+          @logger.warn "[HighLevelAgent] Parse failed (attempt #{attempts}/#{MAX_PARSE_ATTEMPTS}): " \
+                       "#{last_errors.join(', ')}. Retrying..."
+        end
       end
+
+      # All attempts exhausted, create fallback strategy
+      handle_invalid_response(last_errors, context, last_response)
     rescue LLM::Errors::RateLimitError => e
       @logger.warn "[HighLevelAgent] Rate limited: #{e.message}"
       nil

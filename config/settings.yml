@@ -48,6 +48,17 @@ risk:
   max_consecutive_losses: 3      # Consecutive losses before halt
   circuit_breaker_cooldown: 24   # Hours to wait after circuit breaker trigger
 
+# Data Readiness Requirements
+# Trading is blocked unless all required data sources are available
+# This prevents making decisions with incomplete context
+readiness:
+  require_macro_strategy: true    # Require valid macro strategy (not fallback from parse error)
+  require_forecasts: true         # Require at least one asset has recent forecasts
+  require_fresh_market_data: true # Require recent market snapshots for all assets
+  require_sentiment: true         # Require Fear & Greed sentiment data
+  market_data_max_age_minutes: 5  # Market snapshots must be newer than this
+  forecast_max_age_hours: 1       # Forecasts must be newer than this
+
 # Stop Loss / Take Profit Defaults (percentage)
 defaults:
   stop_loss_pct: 0.05            # 5% stop loss
