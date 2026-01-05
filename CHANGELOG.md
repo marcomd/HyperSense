@@ -2,6 +2,21 @@
 
 All notable changes to HyperSense.
 
+## No version - 2026-01-05
+
+### Changed
+- **Improved Architecture Documentation** - Rewrote the Architecture section in README for clarity
+  - New detailed ASCII diagram showing chronological data flow (Data Ingestion → Agents → Risk → Execution)
+  - Clear visualization of user settings (Risk Profiles) affecting trading behavior
+  - Explicit wallet management and control emphasis in Execution Layer
+- **Renamed "Execution Flow" to "How It Works"** - Complete rewrite with 6 subsections:
+  - Data Collection: What MarketSnapshotJob collects and from which sources
+  - Technical Indicators: Simple explanations of EMA, RSI, MACD, ATR, Pivot Points
+  - External Data Sources: Fear & Greed Index, News, Whale Alerts
+  - The Two-Agent System: High-Level and Low-Level agents with weighted inputs
+  - Risk Profiles: User settings table with captain/rudder analogy
+  - Trade Execution & Wallet Management: Full control emphasis, paper vs live modes
+
 ## [0.36.0] - 2026-01-04
 
 ### Added

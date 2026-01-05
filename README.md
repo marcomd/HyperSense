@@ -23,74 +23,201 @@ HyperSense is an autonomous trading agent that operates in discrete cycles to an
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    ORCHESTRATOR                             │
-│      (TradingCycleJob - dynamic 3-25 min based on ATR)      │
-│                   Via Solid Queue                           │
-└─────────────────────────────────────────────────────────────┘
-                              │
-          ┌───────────────────┴───────────────────┐
-          ▼                                       ▼
-┌─────────────────────┐                ┌─────────────────────┐
-│   HIGH-LEVEL AGENT  │                │   LOW-LEVEL AGENT   │
-│   (Macro Strategist)│                │   (Trade Executor)  │
-├─────────────────────┤                ├─────────────────────┤
-│ Frequency: Daily    │                │ Frequency: 3-25 min │
-│ (6am or on-demand)  │                │ (based on ATR)      │
-│                     │                │                     │
-│ Inputs:             │                │ Inputs:             │
-│ - Weekly trends     │                │ - Current prices    │
-│ - Macro sentiment   │                │ - Live indicators   │
-│ - News/events       │                │ - Macro strategy    │
-│                     │                │                     │
-│ Outputs:            │                │ Outputs:            │
-│ - Market narrative  │                │ - Specific trades   │
-│ - Bias direction    │                │ - Entry/exit points │
-│ - Risk tolerance    │                │ - Position sizing   │
-└─────────────────────┘                └─────────────────────┘
-                              │
-                              ▼
-              ┌──────────────────────────┐
-              │   RISK MANAGEMENT LAYER  │
-              │ RiskManager (validation) │
-              │ RiskMonitoringJob (1min) │
-              │ CircuitBreaker (halts)   │
-              └──────────────────────────┘
-                              │
-                              ▼
-              ┌──────────────────────────┐
-              │   DATA INGESTION LAYER   │
-              │ MarketSnapshotJob (1min) │
-              │ Indicators::Calculator   │
-              └──────────────────────────┘
-                              │
-                              ▼
-              ┌──────────────────────────┐
-              │   MarketSnapshot (PG)    │
-              │   Solid Queue (no Redis) │
-              └──────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         1. DATA INGESTION LAYER                             │
+│                    (MarketSnapshotJob - runs every minute)                  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  EXTERNAL DATA SOURCES:                                                     │
+│  ├─ Binance API ────────► Prices, 24h stats, 250 hourly candles             │
+│  ├─ Alternative.me ─────► Fear & Greed Index (market sentiment)             │
+│  ├─ CoinJournal RSS ────► Crypto news headlines                             │
+│  └─ Whale-Alert.io ─────► Large capital movements ($10M+ transfers)         │
+│                                                                             │
+│  CALCULATED INDICATORS:                                                     │
+│  └─ Indicators::Calculator ─► EMA, RSI, MACD, ATR, Pivot Points             │
+│                                                                             │
+│  OUTPUT: MarketSnapshot (PostgreSQL) ─► Historical archive for analysis     │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                    ┌───────────────┴───────────────┐
+                    ▼                               ▼
+┌───────────────────────────────┐   ┌───────────────────────────────────────┐
+│  2. HIGH-LEVEL AGENT          │   │  3. USER SETTINGS                     │
+│  (MacroStrategyJob - daily)   │   │  (Dashboard Risk Profile Selector)    │
+├───────────────────────────────┤   ├───────────────────────────────────────┤
+│                               │   │  Profiles: Cautious/Moderate/Fearless │
+│  INPUTS (weighted):           │   │                                       │
+│  ├─ Technical (50%)           │   │  Controls:                            │
+│  ├─ Sentiment (25%)           │   │  ├─ RSI thresholds (entry signals)    │
+│  ├─ Forecast (15%)            │   │  ├─ Min confidence required           │
+│  └─ Whale alerts (10%)        │   │  ├─ Default leverage                  │
+│                               │   │  └─ Max open positions                │
+│  OUTPUT: MacroStrategy        │   │                                       │
+│  ├─ Market bias (bull/bear)   │   │  Like a captain adjusting the rudder  │
+│  ├─ Risk tolerance (0-1)      │   │  to steer the trading ship            │
+│  └─ Support/resistance levels │   │                                       │
+└───────────────────────────────┘   └───────────────────────────────────────┘
+                    │                               │
+                    └───────────────┬───────────────┘
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         4. LOW-LEVEL AGENT                                  │
+│                 (TradingCycleJob - every 3-25 minutes)                      │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  INPUTS:                                                                    │
+│  ├─ MarketSnapshot data (prices, indicators, sentiment, news, whale alerts) │
+│  ├─ MacroStrategy (daily bias and risk tolerance)                           │
+│  ├─ Risk Profile settings (thresholds and limits)                           │
+│  └─ Current position status (if any)                                        │
+│                                                                             │
+│  OUTPUT: TradingDecision for each asset (BTC, ETH, SOL, BNB)                │
+│  ├─ Operation: OPEN / CLOSE / HOLD                                          │
+│  ├─ Direction: Long (buy) / Short (sell)                                    │
+│  ├─ Entry price, Stop-loss, Take-profit levels                              │
+│  ├─ Position size and leverage                                              │
+│  └─ Confidence score and reasoning                                          │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         5. RISK MANAGEMENT LAYER                            │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  VALIDATION (RiskManager):                                                  │
+│  ├─ Confidence meets minimum threshold                                      │
+│  ├─ Position size within limits                                             │
+│  ├─ Leverage within allowed range                                           │
+│  └─ Risk/reward ratio acceptable                                            │
+│                                                                             │
+│  MONITORING (RiskMonitoringJob - every minute):                             │
+│  ├─ Check stop-loss triggers → Auto-close losing positions                  │
+│  ├─ Check take-profit triggers → Auto-close winning positions               │
+│  └─ Circuit breaker → Halt trading if daily loss exceeds 5%                 │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         6. EXECUTION LAYER                                  │
+│                    (OrderExecutor → Hyperliquid DEX)                        │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  WALLET MANAGEMENT:                                                         │
+│  └─ HyperSense has FULL CONTROL of the connected crypto wallet              │
+│     ├─ Opens positions (buys/sells)                                         │
+│     ├─ Closes positions (realizes profit/loss)                              │
+│     ├─ Sets leverage per trade                                              │
+│     └─ All operations cryptographically signed (EIP-712)                    │
+│                                                                             │
+│  MODES:                                                                     │
+│  ├─ Paper Trading: Simulated execution (no real funds at risk)              │
+│  └─ Live Trading: Real orders on Hyperliquid exchange                       │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-## Execution Flow
+## How It Works
 
-### Job Schedule
+### 1. Data Collection (Every Minute)
 
-| Frequency | Job | Queue | Purpose |
-|-----------|-----|-------|---------|
-| Every minute | MarketSnapshotJob | data | Fetch prices, calculate indicators |
-| Every minute | RiskMonitoringJob | risk | Monitor SL/TP, circuit breaker |
-| Dynamic (3-25 min) | TradingCycleJob | trading | Main trading orchestration |
-| Dynamic (n-1 min) | ForecastJob | analysis | Prophet price predictions (1m, 15m, 1h) |
-| Daily (6am) | MacroStrategyJob | analysis | High-level market analysis |
-| Every 30 minutes | BootstrapTradingCycleJob | trading | Safety net to restart trading chain |
+**MarketSnapshotJob** runs every minute and collects data from multiple sources:
 
-**Dynamic Scheduling**: TradingCycleJob and ForecastJob use ATR-based volatility to determine intervals:
-- Very High volatility (ATR ≥ 3%): 3 min
-- High volatility (ATR ≥ 2%): 6 min
-- Medium volatility (ATR ≥ 1%): 12 min
-- Low volatility (ATR < 1%): 25 min
+| Source | Data Collected | Purpose |
+|--------|----------------|---------|
+| Binance API | Prices, 24h stats, 250 hourly candles | Price data and historical analysis |
+| Alternative.me | Fear & Greed Index (0-100) | Market sentiment |
+| CoinJournal RSS | Crypto news headlines | News sentiment |
+| Whale-Alert.io | Large transfers ($10M+) | Smart money movements |
 
-The **aggregated volatility** uses the highest volatility level across all assets (BTC, ETH, SOL, BNB). If any asset is "medium" while others are "low", the aggregated level is "medium". Each trading decision also stores its **per-symbol ATR percentage** for granular analysis.
+All data is stored in **MarketSnapshot** records (PostgreSQL) for historical analysis and fed to the AI agents.
+
+### 2. Technical Indicators
+
+The **Indicators::Calculator** computes 5 indicators from the 250 hourly candles:
+
+| Indicator | What It Measures | Trading Signals |
+|-----------|------------------|-----------------|
+| **EMA** (20/50/100/200) | Trend direction | Price above EMA = bullish, below = bearish |
+| **RSI** (14-period) | Momentum (0-100 scale) | Below 30 = oversold (buy signal), Above 70 = overbought (sell signal) |
+| **MACD** | Trend-following momentum | Positive histogram = bullish, Negative = bearish |
+| **ATR** (14-period) | Volatility | Controls trading frequency: high volatility = more frequent trades |
+| **Pivot Points** | Support/Resistance levels | Entry and exit price targets (PP, R1, R2, S1, S2) |
+
+### 3. External Data Sources
+
+**Fear & Greed Index** (0-100): A contrarian indicator. Extreme fear (0-24) often signals buying opportunities, while extreme greed (75-100) may signal caution.
+
+**News Headlines**: Recent crypto news from RSS feeds. The AI agents consider headlines when making decisions.
+
+**Whale Alerts**: Large capital movements ($10M+) can signal smart money positioning:
+- Stablecoin minted → Potentially bullish (buying power entering)
+- Transfer to exchange → Potentially bearish (selling pressure)
+- Transfer from exchange → Potentially bullish (accumulation)
+
+### 4. The Two-Agent System
+
+HyperSense uses two AI agents working together:
+
+**High-Level Agent** (runs daily at 6am):
+- Analyzes overall market conditions
+- Sets the daily bias: **bullish**, **bearish**, or **neutral**
+- Defines risk tolerance (0.0 = conservative, 1.0 = aggressive)
+- Identifies key support/resistance levels for each asset
+
+**Low-Level Agent** (runs every 3-25 minutes):
+- Receives the daily macro strategy as context
+- Makes specific trading decisions for each asset (BTC, ETH, SOL, BNB)
+- Can override macro bias when technical signals are strong
+- Outputs: operation (open/close/hold), direction, leverage, stop-loss, take-profit
+
+**Weighted Inputs**: Both agents prioritize data by weight:
+- Technical indicators: **50%** (primary signal)
+- Sentiment: **25%** (Fear & Greed, news)
+- Forecasts: **15%** (Prophet ML predictions)
+- Whale alerts: **10%** (smart money hints)
+
+### 5. Risk Profiles (User Settings)
+
+Users can select a risk profile from the dashboard to adjust trading behavior:
+
+| Parameter | Cautious | Moderate | Fearless |
+|-----------|----------|----------|----------|
+| RSI Oversold | 35 | 30 | 25 |
+| RSI Overbought | 65 | 70 | 75 |
+| Min Confidence | 70% | 60% | 50% |
+| Default Leverage | 2x | 3x | 5x |
+| Max Positions | 3 | 5 | 7 |
+
+**Like a captain adjusting the rudder** to steer the ship: the risk profile controls how aggressively the trading agent pursues opportunities. Cautious profiles require stronger signals and use lower leverage; Fearless profiles act on weaker signals with higher leverage.
+
+### 6. Trade Execution & Wallet Management
+
+**HyperSense has full control of the connected crypto wallet**. When a trading decision is approved:
+
+1. **RiskManager validates** the decision (confidence, position size, leverage limits)
+2. **OrderExecutor** creates the order and sends it to Hyperliquid
+3. **Orders are cryptographically signed** using EIP-712 (wallet private key)
+4. **Position is created/updated** with entry price, stop-loss, take-profit
+
+**Two operating modes:**
+- **Paper Trading**: Simulated execution (no real funds at risk) - perfect for testing
+- **Live Trading**: Real orders on Hyperliquid exchange
+
+**Continuous monitoring** (RiskMonitoringJob every minute):
+- Auto-closes positions when stop-loss or take-profit is triggered
+- Circuit breaker halts all trading if daily loss exceeds 5%
+
+### Job Schedule Summary
+
+| Frequency | Job | Purpose |
+|-----------|-----|---------|
+| Every minute | MarketSnapshotJob | Collect prices, indicators, sentiment |
+| Every minute | RiskMonitoringJob | Monitor SL/TP, circuit breaker |
+| Dynamic (3-25 min) | TradingCycleJob | Main trading orchestration |
+| Daily (6am) | MacroStrategyJob | High-level market analysis |
+| Every 30 min | BootstrapTradingCycleJob | Safety net to restart trading |
+
+**Dynamic Scheduling**: Trading frequency adapts to volatility:
+- Very High volatility (ATR ≥ 3%): every 3 min
+- High volatility (ATR ≥ 2%): every 6 min
+- Medium volatility (ATR ≥ 1%): every 12 min
+- Low volatility (ATR < 1%): every 25 min
 
 ### Background Jobs Dashboard
 
@@ -100,36 +227,9 @@ HyperSense includes Mission Control Jobs for monitoring Solid Queue:
 
 **Authentication:** HTTP Basic Auth (configure in `.env`)
 
-**Features:**
-- View all job queues (trading, analysis, data, risk)
-- Inspect pending and scheduled jobs
-- Monitor failed jobs with error details
-- Retry or discard failed jobs
-- View recurring job schedules
-
-**Configuration:**
 ```bash
 MISSION_CONTROL_USER=admin
 MISSION_CONTROL_PASSWORD=your_secure_password
-```
-
-### Trading Cycle (every 5 min)
-
-1. **Circuit breaker check** - halt if triggered
-2. **Position sync** - fetch positions from Hyperliquid
-3. **Macro strategy** - ensure valid (refresh if stale)
-4. **Low-level agent** - generate decisions for all assets
-5. **Risk validation** - filter through RiskManager
-6. **Trade execution** - execute approved trades
-
-### 24-Hour Timeline
-
-```
-6:00 AM  → MacroStrategyJob creates daily strategy (bullish/bearish/neutral)
-6:05 AM  → TradingCycleJob starts using macro strategy
-All day  → MarketSnapshotJob (1min) + RiskMonitoringJob (1min)
-All day  → TradingCycleJob (5min) makes decisions within macro bias
-~6:00 PM → Macro strategy becomes stale → TradingCycleJob triggers refresh
 ```
 
 ## Tech Stack
