@@ -132,10 +132,27 @@ module LLM
     # @param system_prompt [String] The system instruction
     # @return [RubyLLM::Chat] Configured chat instance
     def build_chat(system_prompt)
-      RubyLLM.chat(model: @model)
+      RubyLLM.chat(**chat_options)
              .with_instructions(system_prompt)
              .with_temperature(@temperature)
              .with_params(**provider_params)
+    end
+
+    # Returns the chat initialization options
+    #
+    # For Ollama, we skip model registry validation since users can
+    # download any model locally and the registry won't know about them.
+    #
+    # @return [Hash] Options hash for RubyLLM.chat
+    def chat_options
+      options = { model: @model }
+
+      if @provider == "ollama"
+        options[:provider] = :ollama
+        options[:assume_model_exists] = true
+      end
+
+      options
     end
 
     # Returns the provider-specific parameters for max tokens

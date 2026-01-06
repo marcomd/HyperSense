@@ -92,10 +92,12 @@ class TradingCycle
   # @return [void]
   def sync_positions_if_configured
     client = Execution::HyperliquidClient.new
-    return unless client.configured?
 
-    # Sync balance first (for accurate PnL tracking) - always runs
-    sync_balance(client)
+    # Sync balance if address is configured (only needs public data)
+    sync_balance(client) if client.read_configured?
+
+    # Skip position sync if not fully configured or in paper trading mode
+    return unless client.configured?
 
     # Skip position sync in paper trading mode to preserve local paper positions
     return if Settings.trading.paper_trading

@@ -30,7 +30,15 @@ module Execution
       @logger = Rails.logger
     end
 
-    # Check if client is properly configured
+    # Check if client is configured for read operations (balance, positions)
+    # Only requires wallet address for public data queries
+    # @return [Boolean]
+    def read_configured?
+      wallet_address.present?
+    end
+
+    # Check if client is configured for write operations (placing orders)
+    # Requires both address and private key
     # @return [Boolean]
     def configured?
       private_key.present? && wallet_address.present?

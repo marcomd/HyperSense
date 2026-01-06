@@ -2,6 +2,18 @@
 
 All notable changes to HyperSense.
 
+## [0.37.1] - 2026-01-06
+
+### Fixed
+- **Ollama Custom Models** - Fixed "Unknown model" error when using custom Ollama models
+  - Added `assume_model_exists: true` flag for Ollama provider to skip registry validation
+  - Ollama users can now use any locally downloaded model (e.g., `qwen3:8b`, `mistral`, etc.)
+  - New `chat_options` private method in `LLM::Client` handles provider-specific initialization
+
+### Technical Details
+- Updated: `app/services/llm/client.rb`
+- Updated test expectations in `spec/services/llm/client_spec.rb`
+
 ## [0.37.0] - 2026-01-05
 
 ### Added

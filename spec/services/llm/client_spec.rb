@@ -197,7 +197,11 @@ RSpec.describe LLM::Client do
         end
 
         it "configures the chat with correct parameters (max_tokens)" do
-          expect(RubyLLM).to receive(:chat).with(model: client.model)
+          expect(RubyLLM).to receive(:chat).with(
+            model: client.model,
+            provider: :ollama,
+            assume_model_exists: true
+          )
           expect(mock_chat).to receive(:with_instructions).with(system_prompt)
           expect(mock_chat).to receive(:with_temperature).with(0.3)
           expect(mock_chat).to receive(:with_params).with({ max_tokens: 1000 })
