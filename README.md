@@ -349,6 +349,10 @@ HyperSense/
 
 ## Setup
 
+> **Quick Start with Docker**: For the easiest setup experience, use [HyperSenseSetup](https://github.com/marcomd/HyperSenseSetup) which provides a single-command deployment of the entire stack (backend, frontend, database) via Docker Compose.
+
+### Manual Setup (Development)
+
 1. **Install Ruby and Node via asdf**
    ```bash
    asdf install
@@ -1418,6 +1422,7 @@ rails runner "puts MarketSnapshot.count"
 
 ## Related Repositories
 
+- [HyperSenseSetup](https://github.com/marcomd/HyperSenseSetup) - Quick Docker deployment with setup scripts
 - [Hyperliquid Ruby Gem](https://github.com/marcomd/hyperliquid) - Forked for write operations
 
 ## License
