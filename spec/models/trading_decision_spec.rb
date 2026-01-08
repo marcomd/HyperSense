@@ -14,6 +14,12 @@ RSpec.describe TradingDecision do
       decision = build(:trading_decision, macro_strategy: strategy)
       expect(decision.macro_strategy).to eq(strategy)
     end
+
+    it "has one order" do
+      decision = create(:trading_decision)
+      order = create(:order, trading_decision: decision)
+      expect(decision.order).to eq(order)
+    end
   end
 
   describe "validations" do
@@ -326,6 +332,83 @@ RSpec.describe TradingDecision do
         expect(empty_decision.target_position).to be_nil
         expect(empty_decision.stop_loss).to be_nil
         expect(empty_decision.take_profit).to be_nil
+      end
+    end
+  end
+
+  describe "position and order relationships" do
+    describe "#position" do
+      it "returns the position associated via order" do
+        decision = create(:trading_decision)
+        position = create(:position)
+        create(:order, trading_decision: decision, position: position)
+
+        expect(decision.position).to eq(position)
+      end
+
+      it "returns nil when no order exists" do
+        decision = create(:trading_decision)
+        expect(decision.position).to be_nil
+      end
+
+      it "returns nil when order has no position" do
+        decision = create(:trading_decision)
+        create(:order, trading_decision: decision, position: nil)
+
+        expect(decision.position).to be_nil
+      end
+    end
+
+    describe "#executed_order" do
+      it "returns the first order associated with the decision" do
+        decision = create(:trading_decision)
+        order = create(:order, trading_decision: decision)
+
+        expect(decision.executed_order).to eq(order)
+      end
+
+      it "returns nil when no orders exist" do
+        decision = create(:trading_decision)
+        expect(decision.executed_order).to be_nil
+      end
+    end
+
+    describe "#outcome" do
+      it "returns 'pending' when no position exists" do
+        decision = create(:trading_decision)
+        expect(decision.outcome).to eq("pending")
+      end
+
+      it "returns 'open' when position is still open" do
+        decision = create(:trading_decision)
+        position = create(:position, status: "open")
+        create(:order, trading_decision: decision, position: position)
+
+        expect(decision.outcome).to eq("open")
+      end
+
+      it "returns 'win' when position is closed with positive pnl" do
+        decision = create(:trading_decision)
+        position = create(:position, :closed, realized_pnl: 100.50)
+        create(:order, trading_decision: decision, position: position)
+
+        expect(decision.outcome).to eq("win")
+      end
+
+      it "returns 'loss' when position is closed with negative pnl" do
+        decision = create(:trading_decision)
+        position = create(:position, :closed, realized_pnl: -50.25)
+        create(:order, trading_decision: decision, position: position)
+
+        expect(decision.outcome).to eq("loss")
+      end
+
+      it "returns 'breakeven' when position is closed with zero pnl" do
+        decision = create(:trading_decision)
+        position = create(:position, :closed, realized_pnl: 0)
+        create(:order, trading_decision: decision, position: position)
+
+        expect(decision.outcome).to eq("breakeven")
       end
     end
   end

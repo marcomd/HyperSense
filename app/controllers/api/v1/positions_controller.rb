@@ -13,7 +13,7 @@ module Api
       #   - page: pagination page number
       #   - per_page: items per page (max 100)
       def index
-        positions = Position.recent
+        positions = Position.recent.includes(orders: :trading_decision)
         positions = positions.where(status: params[:status]) if params[:status].present?
         positions = positions.for_symbol(params[:symbol].upcase) if params[:symbol].present?
 
@@ -27,7 +27,7 @@ module Api
       # GET /api/v1/positions/open
       # Returns only open positions with fee information
       def open
-        positions = Position.open.recent.includes(:orders)
+        positions = Position.open.recent.includes(orders: :trading_decision)
 
         total_fees = positions.sum(&:total_fees).round(2)
         gross_pnl = positions.sum(&:unrealized_pnl).to_f.round(2)
@@ -47,7 +47,7 @@ module Api
 
       # GET /api/v1/positions/:id
       def show
-        position = Position.find(params[:id])
+        position = Position.includes(orders: :trading_decision).find(params[:id])
         render json: { position: serialize_position(position, detailed: true) }
       end
 
@@ -140,7 +140,10 @@ module Api
             exit_fee: position.exit_fee,
             total_fees: position.total_fees,
             net_pnl: position.net_pnl
-          }
+          },
+          # Decision context
+          opening_decision: serialize_decision_summary(position, "open"),
+          closing_decision: serialize_decision_summary(position, "close")
         }
 
         if detailed
@@ -162,6 +165,26 @@ module Api
         end
 
         data
+      end
+
+      # Serializes a decision summary for position response
+      # @param position [Position] The position to get decision from
+      # @param operation [String] "open" or "close"
+      # @return [Hash, nil] Decision summary or nil
+      def serialize_decision_summary(position, operation)
+        order = position.orders.find do |o|
+          o.trading_decision&.operation == operation
+        end
+        decision = order&.trading_decision
+        return nil unless decision
+
+        {
+          id: decision.id,
+          confidence: decision.confidence&.to_f,
+          reasoning: decision.reasoning&.truncate(200),
+          risk_profile_name: decision.risk_profile_name,
+          created_at: decision.created_at.iso8601
+        }
       end
     end
   end

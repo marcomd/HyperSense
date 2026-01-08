@@ -262,6 +262,24 @@ class Position < ApplicationRecord
     @fee_breakdown ||= Costs::TradingFeeCalculator.new.for_position(self)
   end
 
+  # Decision Relationships (via Order)
+
+  # Get the decision that opened this position
+  # @return [TradingDecision, nil]
+  def opening_decision
+    orders.joins(:trading_decision)
+          .where(trading_decisions: { operation: "open" })
+          .first&.trading_decision
+  end
+
+  # Get the decision that closed this position
+  # @return [TradingDecision, nil]
+  def closing_decision
+    orders.joins(:trading_decision)
+          .where(trading_decisions: { operation: "close" })
+          .first&.trading_decision
+  end
+
   private
 
   def set_opened_at

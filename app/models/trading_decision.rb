@@ -43,6 +43,7 @@ class TradingDecision < ApplicationRecord
 
   # Associations
   belongs_to :macro_strategy, optional: true
+  has_one :order, dependent: :nullify
 
   # Validations
   validates :symbol, presence: true
@@ -140,5 +141,31 @@ class TradingDecision < ApplicationRecord
   # @return [String, nil]
   def reasoning
     parsed_decision["reasoning"]
+  end
+
+  # Position and Order Relationships (via Order)
+
+  # Get the position associated with this decision (via order)
+  # @return [Position, nil]
+  def position
+    order&.position
+  end
+
+  # Get the order that executed this decision (alias for clarity)
+  # @return [Order, nil]
+  def executed_order
+    order
+  end
+
+  # Outcome of the trade (win/loss/breakeven/open/pending)
+  # @return [String] Outcome label
+  def outcome
+    pos = position
+    return "pending" unless pos
+    return "open" if pos.open?
+    return "win" if pos.realized_pnl.to_d.positive?
+    return "loss" if pos.realized_pnl.to_d.negative?
+
+    "breakeven"
   end
 end

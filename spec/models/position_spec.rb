@@ -562,4 +562,67 @@ RSpec.describe Position do
       end
     end
   end
+
+  describe "decision relationships" do
+    describe "#opening_decision" do
+      it "returns the decision that opened the position" do
+        position = create(:position)
+        open_decision = create(:trading_decision, operation: "open")
+        create(:order, trading_decision: open_decision, position: position)
+
+        expect(position.opening_decision).to eq(open_decision)
+      end
+
+      it "returns nil when no opening decision exists" do
+        position = create(:position)
+        expect(position.opening_decision).to be_nil
+      end
+
+      it "does not return close decisions" do
+        position = create(:position)
+        close_decision = create(:trading_decision, operation: "close")
+        create(:order, trading_decision: close_decision, position: position)
+
+        expect(position.opening_decision).to be_nil
+      end
+    end
+
+    describe "#closing_decision" do
+      it "returns the decision that closed the position" do
+        position = create(:position, :closed)
+        close_decision = create(:trading_decision, operation: "close")
+        create(:order, trading_decision: close_decision, position: position)
+
+        expect(position.closing_decision).to eq(close_decision)
+      end
+
+      it "returns nil when no closing decision exists" do
+        position = create(:position)
+        expect(position.closing_decision).to be_nil
+      end
+
+      it "does not return open decisions" do
+        position = create(:position)
+        open_decision = create(:trading_decision, operation: "open")
+        create(:order, trading_decision: open_decision, position: position)
+
+        expect(position.closing_decision).to be_nil
+      end
+    end
+
+    describe "full trade lifecycle" do
+      it "returns both opening and closing decisions" do
+        position = create(:position, :closed)
+
+        open_decision = create(:trading_decision, operation: "open")
+        close_decision = create(:trading_decision, operation: "close")
+
+        create(:order, trading_decision: open_decision, position: position)
+        create(:order, trading_decision: close_decision, position: position)
+
+        expect(position.opening_decision).to eq(open_decision)
+        expect(position.closing_decision).to eq(close_decision)
+      end
+    end
+  end
 end

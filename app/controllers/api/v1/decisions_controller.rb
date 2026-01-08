@@ -14,7 +14,7 @@ module Api
       #   - page: pagination page number
       #   - per_page: items per page (max 100)
       def index
-        decisions = TradingDecision.recent.includes(:macro_strategy)
+        decisions = TradingDecision.recent.includes(:macro_strategy, order: :position)
         decisions = filter_decisions(decisions)
 
         result = paginate(decisions)
@@ -26,7 +26,7 @@ module Api
 
       # GET /api/v1/decisions/:id
       def show
-        decision = TradingDecision.find(params[:id])
+        decision = TradingDecision.includes(order: :position).find(params[:id])
         render json: { decision: serialize_decision(decision, detailed: true) }
       end
 
@@ -34,7 +34,7 @@ module Api
       # Returns last N decisions for quick dashboard view
       def recent
         limit = (params[:limit] || 20).to_i.clamp(1, 100)
-        decisions = TradingDecision.recent.limit(limit)
+        decisions = TradingDecision.recent.includes(order: :position).limit(limit)
 
         render json: {
           decisions: decisions.map { |d| serialize_decision(d) }
@@ -97,6 +97,9 @@ module Api
       # @param detailed [Boolean] Whether to include full context details
       # @return [Hash] The serialized decision data
       def serialize_decision(decision, detailed: false)
+        order = decision.order
+        position = order&.position
+
         data = {
           id: decision.id,
           symbol: decision.symbol,
@@ -114,7 +117,9 @@ module Api
           atr_value: decision.atr_value&.to_f,
           next_cycle_interval: decision.next_cycle_interval,
           risk_profile_name: decision.risk_profile_name,
-          created_at: decision.created_at.iso8601
+          created_at: decision.created_at.iso8601,
+          order: serialize_order_summary(order),
+          position: serialize_position_summary(position)
         }
 
         if detailed
@@ -131,6 +136,57 @@ module Api
         end
 
         data
+      end
+
+      # Serializes order summary for decision response
+      # @param order [Order, nil] The order to serialize
+      # @return [Hash, nil] Order summary or nil
+      def serialize_order_summary(order)
+        return nil unless order
+
+        {
+          id: order.id,
+          status: order.status,
+          side: order.side,
+          size: order.size&.to_f,
+          filled_size: order.filled_size&.to_f,
+          average_fill_price: order.average_fill_price&.to_f,
+          filled_at: order.filled_at&.iso8601
+        }
+      end
+
+      # Serializes position summary with outcome for decision response
+      # @param position [Position, nil] The position to serialize
+      # @return [Hash, nil] Position summary with outcome or nil
+      def serialize_position_summary(position)
+        return nil unless position
+
+        {
+          id: position.id,
+          status: position.status,
+          direction: position.direction,
+          entry_price: position.entry_price&.to_f,
+          current_price: position.current_price&.to_f,
+          realized_pnl: position.realized_pnl&.to_f,
+          unrealized_pnl: position.unrealized_pnl&.to_f,
+          pnl_percent: position.pnl_percent&.round(2),
+          close_reason: position.close_reason,
+          closed_at: position.closed_at&.iso8601,
+          outcome: position_outcome(position)
+        }
+      end
+
+      # Determines position outcome (win/loss/breakeven/nil for open)
+      # @param position [Position] The position to evaluate
+      # @return [String, nil] Outcome label or nil if still open
+      def position_outcome(position)
+        return nil unless position.closed?
+
+        pnl = position.realized_pnl.to_d
+        return "win" if pnl.positive?
+        return "loss" if pnl.negative?
+
+        "breakeven"
       end
     end
   end

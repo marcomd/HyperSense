@@ -2,6 +2,31 @@
 
 All notable changes to HyperSense.
 
+## [0.38.0] - 2026-01-08
+
+### Added
+- **Decision-Position Linkage** - Trading decisions now expose their linked order and position data
+  - Added `has_one :order` association to `TradingDecision` model
+  - Added `#position` and `#executed_order` helper methods to `TradingDecision`
+  - Added `#outcome` method returning win/loss/breakeven/open/pending status
+  - Added `#opening_decision` and `#closing_decision` methods to `Position` model
+  - API responses now include full trade lifecycle data
+
+### Changed
+- **DecisionsController** - Enhanced API responses with order and position data
+  - `serialize_decision` now includes `order` and `position` summaries
+  - Position summary includes `outcome` field (win/loss/breakeven for closed positions)
+  - Added eager loading with `includes(order: :position)` to prevent N+1 queries
+
+- **PositionsController** - Enhanced API responses with decision context
+  - `serialize_position` now includes `opening_decision` and `closing_decision` summaries
+  - Added eager loading with `includes(orders: :trading_decision)`
+
+### Technical Details
+- Updated: `app/models/trading_decision.rb`, `app/models/position.rb`
+- Updated: `app/controllers/api/v1/decisions_controller.rb`, `app/controllers/api/v1/positions_controller.rb`
+- Added: Tests for new model methods and associations
+
 ## [0.37.2] - 2026-01-07
 
 ### Fixed
