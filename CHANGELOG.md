@@ -2,6 +2,19 @@
 
 All notable changes to HyperSense.
 
+## [0.37.2] - 2026-01-07
+
+### Fixed
+- **Solid Queue Running in Both Backend and Worker Containers** - Fixed Solid Queue plugin loading in Puma despite `SOLID_QUEUE_IN_PUMA: "false"`
+  - Root cause: In Ruby, environment variables are always strings, and any non-empty string (including `"false"`) is truthy
+  - The condition `if ENV["SOLID_QUEUE_IN_PUMA"]` evaluated to `true` because `"false"` is a truthy string
+  - Changed condition to `if ENV.fetch("SOLID_QUEUE_IN_PUMA", "false") == "true"` for explicit string comparison
+  - This ensures the worker container is the only process running Solid Queue jobs
+
+### Technical Details
+- Updated: `config/puma.rb`
+- Ruby gotcha: `if "false"` is `true` because only `nil` and `false` (boolean) are falsy in Ruby
+
 ## [0.37.1] - 2026-01-06
 
 ### Fixed

@@ -1,6 +1,6 @@
 # HyperSense
 
-**Version 0.37.1** | Autonomous AI Trading Agent for cryptocurrency markets.
+**Version 0.37.2** | Autonomous AI Trading Agent for cryptocurrency markets.
 
 ![HyperSense_cover1.jpg](docs/HyperSense_cover1.jpg)
 
@@ -1378,6 +1378,20 @@ services:
     depends_on:
       backend: { condition: service_healthy }
 ```
+
+> **Ruby Boolean Gotcha for Docker Environment Variables**
+>
+> In Ruby, environment variables are always strings. The string `"false"` is **truthy** (only `nil` and the boolean `false` are falsy). This means:
+> ```ruby
+> if ENV["SOLID_QUEUE_IN_PUMA"]  # Returns "false" (string) → truthy!
+>   # This code RUNS even when set to "false"
+> end
+> ```
+> HyperSense handles this correctly by comparing against the string `"true"`:
+> ```ruby
+> if ENV.fetch("SOLID_QUEUE_IN_PUMA", "false") == "true"
+> ```
+> Keep this in mind when adding new boolean environment variables.
 
 **Architecture:**
 - **db**: PostgreSQL 16 with multi-database init (primary, cache, queue, cable)
