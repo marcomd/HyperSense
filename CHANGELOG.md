@@ -2,6 +2,48 @@
 
 All notable changes to HyperSense.
 
+## [0.39.0] - 2026-01-08
+
+### Added
+- **Trading Mode Control** - User-controlled trading modes with circuit breaker integration
+  - Three modes: `enabled` (normal operation), `exit_only` (close positions only), `blocked` (complete halt)
+  - Circuit breaker now automatically sets mode to `exit_only` when triggered
+  - Users can override circuit breaker by switching back to `enabled` via dashboard
+  - Real-time WebSocket updates when trading mode changes
+
+- **TradingMode Model** - New singleton model for trading mode state
+  - `TradingMode.current` - Returns current mode singleton
+  - `TradingMode.switch_to!(mode, changed_by:, reason:)` - Changes mode and broadcasts update
+  - Helper methods: `can_open?`, `can_close?`
+
+- **TradingModesController** - REST API for trading mode management
+  - `GET /api/v1/trading_mode/current` - Returns current mode and permissions
+  - `PUT /api/v1/trading_mode/switch` - Changes mode, broadcasts via WebSocket
+
+### Changed
+- **CircuitBreaker** - Now sets TradingMode directly when triggered
+  - Removed cooldown-based trading resumption (users now control when to resume)
+  - `trigger!` method sets mode to `exit_only` with reason
+  - `trading_allowed?` delegates to `TradingMode.current.can_open?`
+
+- **TradingCycle** - Now checks TradingMode instead of CircuitBreaker
+  - Step 0 checks if mode is `blocked` (complete halt)
+  - `filter_and_approve` checks `can_open?` for opens, `can_close?` for closes
+
+- **HealthController** - Enhanced response with trading mode details
+  - Added `trading_mode`, `can_open_positions`, `can_close_positions` fields
+  - `trading_allowed` now derived from mode (true if can open or close)
+
+- **DashboardController** - Added `trading_mode` to dashboard response
+
+- **DashboardChannel** - Added `broadcast_trading_mode_update` method
+
+### Technical Details
+- New files: `app/models/trading_mode.rb`, `app/controllers/api/v1/trading_modes_controller.rb`
+- New migration: `create_trading_modes` table
+- Updated: `risk/circuit_breaker.rb`, `trading_cycle.rb`, `health_controller.rb`, `dashboard_controller.rb`, `dashboard_channel.rb`
+- Full test coverage: 985 examples, 0 failures
+
 ## [0.38.0] - 2026-01-08
 
 ### Added

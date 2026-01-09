@@ -86,6 +86,12 @@ Rails.application.routes.draw do
         get :current
         put :switch
       end
+
+      # Trading Mode Management
+      resource :trading_mode, only: [] do
+        get :current
+        put :switch
+      end
     end
   end
 

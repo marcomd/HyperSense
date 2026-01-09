@@ -3,12 +3,12 @@
 # Main orchestrator for the trading cycle
 #
 # Coordinates the entire trading workflow:
-# 1. Check circuit breaker (halt if triggered)
+# 1. Check trading mode (halt if blocked, limit operations if exit_only)
 # 2. Sync positions from Hyperliquid
 # 3. Check/refresh macro strategy
 # 4. Verify data readiness (blocks if critical data missing)
 # 5. Run low-level agent for all assets
-# 6. Filter and approve decisions (using RiskManager)
+# 6. Filter and approve decisions (using RiskManager + TradingMode)
 # 7. Execute approved trades
 #
 # @example
@@ -33,18 +33,22 @@ class TradingCycle
 
   # Execute the full trading cycle
   #
-  # @return [Array<TradingDecision>] Array of decisions made (empty if circuit breaker active)
+  # @return [Array<TradingDecision>] Array of decisions made (empty if trading blocked)
   # @example
   #   cycle.execute
   #   # => [#<TradingDecision symbol: "BTC", operation: "hold", confidence: 0.45>]
   def execute
     @logger.info "[TradingCycle] Starting execution..."
 
-    # Step 0: Check circuit breaker
-    unless @circuit_breaker.trading_allowed?
-      @logger.warn "[TradingCycle] Circuit breaker active: #{@circuit_breaker.trigger_reason}"
+    # Step 0: Check trading mode
+    @trading_mode = TradingMode.current
+    if @trading_mode.mode == "blocked"
+      @logger.warn "[TradingCycle] Trading blocked: #{@trading_mode.reason || 'manually disabled'}"
       return []
     end
+
+    @logger.info "[TradingCycle] Trading mode: #{@trading_mode.mode}" \
+                 "#{@trading_mode.mode == 'exit_only' ? ' (closes only)' : ''}"
 
     # Step 1: Sync positions from Hyperliquid (if configured)
     sync_positions_if_configured
@@ -166,13 +170,24 @@ class TradingCycle
   end
 
   # Filter decisions through risk checks and approve valid ones
-  # Uses Risk::RiskManager for centralized validation
+  # Uses Risk::RiskManager for centralized validation and respects TradingMode
   # @param decisions [Array<TradingDecision>] Decisions to filter
   # @return [Array<TradingDecision>] Approved decisions
   def filter_and_approve(decisions)
     decisions.select do |decision|
       next false unless decision.actionable?
       next false unless decision.status == "pending"
+
+      # Check trading mode permissions
+      if decision.operation == "open" && !@trading_mode.can_open?
+        decision.reject!("Trading mode '#{@trading_mode.mode}' does not allow opening positions")
+        next false
+      end
+
+      if decision.operation == "close" && !@trading_mode.can_close?
+        decision.reject!("Trading mode '#{@trading_mode.mode}' does not allow closing positions")
+        next false
+      end
 
       # Get current price for validation
       entry_price = fetch_current_price(decision.symbol)

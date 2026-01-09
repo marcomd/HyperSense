@@ -9,57 +9,29 @@ RSpec.describe Risk::CircuitBreaker do
   before do
     # Use memory store for tests
     allow(Rails).to receive(:cache).and_return(memory_store)
+    # Clean up trading modes
+    TradingMode.delete_all
   end
 
   describe "#trading_allowed?" do
-    context "when no losses" do
+    context "when trading mode is enabled" do
       it "returns true" do
+        create(:trading_mode, mode: "enabled")
         expect(circuit_breaker.trading_allowed?).to be true
       end
     end
 
-    context "when daily loss exceeds max" do
-      before do
-        # Simulate 6% daily loss (max is 5%)
-        circuit_breaker.record_loss(600) # $600 loss on $10,000 account = 6%
-        allow(circuit_breaker).to receive(:fetch_account_value).and_return(10_000)
-      end
-
+    context "when trading mode is exit_only" do
       it "returns false" do
+        create(:trading_mode, mode: "exit_only")
         expect(circuit_breaker.trading_allowed?).to be false
       end
     end
 
-    context "when consecutive losses exceed max" do
-      before do
-        # Record 4 consecutive losses (max is 3)
-        4.times { circuit_breaker.record_loss(50) }
-      end
-
+    context "when trading mode is blocked" do
       it "returns false" do
+        create(:trading_mode, mode: "blocked")
         expect(circuit_breaker.trading_allowed?).to be false
-      end
-    end
-
-    context "during cooldown period" do
-      before do
-        circuit_breaker.trigger!("test")
-      end
-
-      it "returns false" do
-        expect(circuit_breaker.trading_allowed?).to be false
-      end
-    end
-
-    context "after cooldown expires" do
-      before do
-        circuit_breaker.trigger!("test")
-        # Advance time past cooldown
-        travel_to(25.hours.from_now)
-      end
-
-      it "returns true" do
-        expect(circuit_breaker.trading_allowed?).to be true
       end
     end
   end
@@ -94,21 +66,33 @@ RSpec.describe Risk::CircuitBreaker do
   end
 
   describe "#trigger!" do
-    it "sets triggered state" do
+    before do
+      create(:trading_mode, mode: "enabled")
+    end
+
+    it "sets trading mode to exit_only" do
       circuit_breaker.trigger!("max_daily_loss")
-      expect(circuit_breaker.triggered?).to be true
+      expect(TradingMode.current_mode).to eq("exit_only")
     end
 
-    it "records trigger reason" do
+    it "sets changed_by to circuit_breaker" do
+      circuit_breaker.trigger!("max_daily_loss")
+      expect(TradingMode.current.changed_by).to eq("circuit_breaker")
+    end
+
+    it "sets human-readable reason for max_daily_loss" do
+      circuit_breaker.trigger!("max_daily_loss")
+      expect(TradingMode.current.reason).to eq("Daily loss exceeded 5.0%")
+    end
+
+    it "sets human-readable reason for consecutive_losses" do
       circuit_breaker.trigger!("consecutive_losses")
-      expect(circuit_breaker.trigger_reason).to eq("consecutive_losses")
+      expect(TradingMode.current.reason).to eq("3 consecutive losing trades")
     end
 
-    it "sets cooldown expiry" do
-      freeze_time do
-        circuit_breaker.trigger!("test")
-        expect(circuit_breaker.cooldown_until).to eq(24.hours.from_now)
-      end
+    it "broadcasts trading mode update" do
+      expect(DashboardChannel).to receive(:broadcast_trading_mode_update)
+      circuit_breaker.trigger!("test")
     end
   end
 
@@ -119,17 +103,25 @@ RSpec.describe Risk::CircuitBreaker do
       circuit_breaker.trigger!("test")
     end
 
-    it "clears all state" do
+    it "clears loss tracking state" do
       circuit_breaker.reset!
 
       expect(circuit_breaker.daily_loss).to eq(0)
       expect(circuit_breaker.consecutive_losses).to eq(0)
-      expect(circuit_breaker.triggered?).to be false
+    end
+
+    it "resets trading mode to enabled" do
+      circuit_breaker.reset!
+
+      expect(TradingMode.current_mode).to eq("enabled")
+      expect(TradingMode.current.changed_by).to eq("system")
+      expect(TradingMode.current.reason).to be_nil
     end
   end
 
   describe "#check_and_update!" do
     before do
+      create(:trading_mode, mode: "enabled")
       allow(circuit_breaker).to receive(:fetch_account_value).and_return(10_000)
     end
 
@@ -141,7 +133,7 @@ RSpec.describe Risk::CircuitBreaker do
       it "triggers circuit breaker" do
         circuit_breaker.check_and_update!
         expect(circuit_breaker.triggered?).to be true
-        expect(circuit_breaker.trigger_reason).to eq("max_daily_loss")
+        expect(TradingMode.current_mode).to eq("exit_only")
       end
     end
 
@@ -153,7 +145,7 @@ RSpec.describe Risk::CircuitBreaker do
       it "triggers circuit breaker" do
         circuit_breaker.check_and_update!
         expect(circuit_breaker.triggered?).to be true
-        expect(circuit_breaker.trigger_reason).to eq("consecutive_losses")
+        expect(TradingMode.current_mode).to eq("exit_only")
       end
     end
 
@@ -165,11 +157,85 @@ RSpec.describe Risk::CircuitBreaker do
       it "does not trigger" do
         circuit_breaker.check_and_update!
         expect(circuit_breaker.triggered?).to be false
+        expect(TradingMode.current_mode).to eq("enabled")
+      end
+    end
+
+    context "when mode is already exit_only" do
+      before do
+        TradingMode.switch_to!("exit_only", changed_by: "dashboard")
+        4.times { circuit_breaker.record_loss(50) } # Exceed threshold
+      end
+
+      it "does not re-trigger" do
+        expect(circuit_breaker).not_to receive(:trigger!)
+        circuit_breaker.check_and_update!
+      end
+    end
+
+    context "when mode is blocked" do
+      before do
+        TradingMode.switch_to!("blocked", changed_by: "dashboard")
+        4.times { circuit_breaker.record_loss(50) } # Exceed threshold
+      end
+
+      it "does not trigger" do
+        expect(circuit_breaker).not_to receive(:trigger!)
+        circuit_breaker.check_and_update!
       end
     end
   end
 
+  describe "#triggered?" do
+    before do
+      create(:trading_mode, mode: "enabled")
+    end
+
+    it "returns false when mode is enabled" do
+      expect(circuit_breaker.triggered?).to be false
+    end
+
+    it "returns true when mode is exit_only and changed_by is circuit_breaker" do
+      TradingMode.switch_to!("exit_only", changed_by: "circuit_breaker")
+      expect(circuit_breaker.triggered?).to be true
+    end
+
+    it "returns false when mode is exit_only but changed_by is dashboard" do
+      TradingMode.switch_to!("exit_only", changed_by: "dashboard")
+      expect(circuit_breaker.triggered?).to be false
+    end
+
+    it "returns false when mode is blocked" do
+      TradingMode.switch_to!("blocked", changed_by: "circuit_breaker")
+      expect(circuit_breaker.triggered?).to be false
+    end
+  end
+
+  describe "#trigger_reason" do
+    before do
+      create(:trading_mode, mode: "enabled")
+    end
+
+    it "returns nil when mode is enabled" do
+      expect(circuit_breaker.trigger_reason).to be_nil
+    end
+
+    it "returns reason when mode is exit_only" do
+      TradingMode.switch_to!("exit_only", changed_by: "circuit_breaker", reason: "Test reason")
+      expect(circuit_breaker.trigger_reason).to eq("Test reason")
+    end
+
+    it "returns reason when mode is blocked" do
+      TradingMode.switch_to!("blocked", changed_by: "dashboard", reason: "Manual halt")
+      expect(circuit_breaker.trigger_reason).to eq("Manual halt")
+    end
+  end
+
   describe "#status" do
+    before do
+      create(:trading_mode, mode: "enabled")
+    end
+
     it "returns current state" do
       circuit_breaker.record_loss(100)
 
@@ -179,6 +245,18 @@ RSpec.describe Risk::CircuitBreaker do
       expect(status[:daily_loss]).to eq(100)
       expect(status[:consecutive_losses]).to eq(1)
       expect(status[:triggered]).to be false
+      expect(status[:trading_mode]).to eq("enabled")
+    end
+
+    it "reflects triggered state" do
+      circuit_breaker.trigger!("test")
+
+      status = circuit_breaker.status
+
+      expect(status[:trading_allowed]).to be false
+      expect(status[:triggered]).to be true
+      expect(status[:trading_mode]).to eq("exit_only")
+      expect(status[:trading_mode_changed_by]).to eq("circuit_breaker")
     end
   end
 

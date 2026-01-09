@@ -7,8 +7,10 @@ module Risk
   # - Daily loss percentage (triggers if exceeds max_daily_loss)
   # - Consecutive losses (triggers if exceeds max_consecutive_losses)
   #
-  # State is stored in Rails.cache with daily expiry for loss tracking.
-  # Can be migrated to database model if persistence is needed.
+  # When thresholds are exceeded, automatically sets TradingMode to "exit_only".
+  # User can override by switching back to "enabled" via the dashboard.
+  #
+  # Loss tracking is stored in Rails.cache with daily expiry.
   #
   # @example
   #   breaker = Risk::CircuitBreaker.new
@@ -32,22 +34,16 @@ module Risk
     # Default fallback values when Settings are not configured
     DEFAULT_MAX_DAILY_LOSS = 0.05
     DEFAULT_MAX_CONSECUTIVE_LOSSES = 3
-    DEFAULT_COOLDOWN_HOURS = 24
 
     def initialize(account_manager: nil)
       @account_manager = account_manager || Execution::AccountManager.new
       @logger = Rails.logger
     end
 
-    # Check if trading is currently allowed
+    # Check if opening new positions is currently allowed
     # @return [Boolean]
     def trading_allowed?
-      return false if triggered?
-      return false if cooldown_active?
-      return false if daily_loss_exceeded?
-      return false if consecutive_losses_exceeded?
-
-      true
+      TradingMode.current.can_open?
     end
 
     # Record a losing trade
@@ -65,17 +61,24 @@ module Risk
       @logger.info "[CircuitBreaker] Recorded win: $#{amount.abs}"
     end
 
-    # Manually trigger the circuit breaker
-    # @param reason [String] Trigger reason
+    # Trigger the circuit breaker by setting TradingMode to exit_only
+    # @param reason [String] Trigger reason (e.g., "max_daily_loss", "consecutive_losses")
     def trigger!(reason)
-      Rails.cache.write(cache_key(:triggered), true, expires_in: cooldown_hours.hours)
-      Rails.cache.write(cache_key(:trigger_reason), reason, expires_in: cooldown_hours.hours)
-      Rails.cache.write(cache_key(:cooldown_until), cooldown_hours.hours.from_now, expires_in: cooldown_hours.hours)
-      @logger.warn "[CircuitBreaker] TRIGGERED: #{reason}"
+      human_reason = format_reason(reason)
+      TradingMode.switch_to!("exit_only", changed_by: "circuit_breaker", reason: human_reason)
+
+      # Broadcast via WebSocket for real-time dashboard update
+      DashboardChannel.broadcast_trading_mode_update(TradingMode.current)
+
+      @logger.warn "[CircuitBreaker] TRIGGERED: #{reason} - Trading mode set to exit_only"
     end
 
     # Check thresholds and trigger if exceeded
+    # Only triggers if TradingMode is currently "enabled" (user hasn't manually blocked/limited)
     def check_and_update!
+      # Don't trigger if mode is already exit_only or blocked
+      return unless TradingMode.current_mode == "enabled"
+
       if daily_loss_exceeded?
         trigger!("max_daily_loss")
       elsif consecutive_losses_exceeded?
@@ -83,18 +86,18 @@ module Risk
       end
     end
 
-    # Reset all circuit breaker state
+    # Reset all circuit breaker state and set TradingMode back to enabled
     def reset!
-      %i[consecutive_losses triggered trigger_reason cooldown_until].each do |key|
-        Rails.cache.delete(cache_key(key))
-      end
+      Rails.cache.delete(cache_key(:consecutive_losses))
       Rails.cache.delete(daily_loss_key)
-      @logger.info "[CircuitBreaker] State reset"
+      TradingMode.switch_to!("enabled", changed_by: "system", reason: nil)
+      @logger.info "[CircuitBreaker] State reset - Trading mode set to enabled"
     end
 
     # Current state summary
     # @return [Hash]
     def status
+      mode = TradingMode.current
       {
         trading_allowed: trading_allowed?,
         daily_loss: daily_loss,
@@ -102,7 +105,8 @@ module Risk
         consecutive_losses: consecutive_losses,
         triggered: triggered?,
         trigger_reason: trigger_reason,
-        cooldown_until: cooldown_until
+        trading_mode: mode.mode,
+        trading_mode_changed_by: mode.changed_by
       }
     end
 
@@ -117,16 +121,16 @@ module Risk
       Rails.cache.fetch(cache_key(:consecutive_losses)) { 0 }.to_i
     end
 
+    # Returns true if circuit breaker has triggered (mode is exit_only and changed_by is circuit_breaker)
     def triggered?
-      Rails.cache.read(cache_key(:triggered)) == true
+      mode = TradingMode.current
+      mode.mode == "exit_only" && mode.changed_by == "circuit_breaker"
     end
 
+    # Returns the reason for the current trading mode restriction
     def trigger_reason
-      Rails.cache.read(cache_key(:trigger_reason))
-    end
-
-    def cooldown_until
-      Rails.cache.read(cache_key(:cooldown_until))
+      mode = TradingMode.current
+      mode.reason if mode.mode != "enabled"
     end
 
     private
@@ -151,13 +155,6 @@ module Risk
 
     def consecutive_losses_exceeded?
       consecutive_losses >= max_consecutive_losses
-    end
-
-    def cooldown_active?
-      until_time = cooldown_until
-      return false unless until_time
-
-      Time.current < until_time
     end
 
     def daily_loss_percentage
@@ -198,8 +195,16 @@ module Risk
       Settings.risk.max_consecutive_losses || DEFAULT_MAX_CONSECUTIVE_LOSSES
     end
 
-    def cooldown_hours
-      Settings.risk.circuit_breaker_cooldown || DEFAULT_COOLDOWN_HOURS
+    # Format trigger reason for human-readable display
+    def format_reason(reason)
+      case reason
+      when "max_daily_loss"
+        "Daily loss exceeded #{(max_daily_loss_pct * 100).round(1)}%"
+      when "consecutive_losses"
+        "#{max_consecutive_losses} consecutive losing trades"
+      else
+        reason
+      end
     end
   end
 end

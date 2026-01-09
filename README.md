@@ -1,6 +1,6 @@
 # HyperSense
 
-**Version 0.38.0** | Autonomous AI Trading Agent for cryptocurrency markets.
+**Version 0.39.0** | Autonomous AI Trading Agent for cryptocurrency markets.
 
 ![HyperSense_cover1.jpg](docs/HyperSense_cover1.jpg)
 
@@ -16,6 +16,7 @@ HyperSense is an autonomous trading agent that operates in discrete cycles to an
 - **Multi-Agent Architecture**: High-level (macro strategy) + Low-level (trade execution) agents
 - **Technical Analysis**: EMA, RSI, MACD, ATR (volatility), Pivot Points
 - **Risk Profiles**: User-selectable trading styles (Cautious/Moderate/Fearless) with different parameters
+- **Trading Mode Control**: User-controllable trading modes (Enabled/Exit Only/Blocked) with circuit breaker integration
 - **Risk Management**: Position sizing, stop-loss, take-profit, confidence scoring
 - **Cost Tracking**: On-the-fly calculation of trading fees, LLM costs, and server costs with net P&L
 - **Real-time Dashboard**: React frontend with routing, filters, and detail pages
@@ -854,6 +855,71 @@ Each trading decision stores the active profile name at creation time (`risk_pro
 
 When a profile is switched, a `risk_profile_update` message is broadcast to all connected dashboard clients, enabling real-time UI updates.
 
+### 5.2 Trading Mode Control (Enabled / Exit Only / Blocked)
+
+Trading modes allow users to control the trading engine's operation state. The circuit breaker automatically sets the mode to "exit_only" when risk thresholds are breached, but users can override this via the dashboard.
+
+**Available Modes:**
+
+| Mode | Can Open | Can Close | Description |
+|------|----------|-----------|-------------|
+| **Enabled** | Yes | Yes | Normal operation - trading engine can open and close positions |
+| **Exit Only** | No | Yes | Wind-down mode - can only close existing positions (set automatically by circuit breaker) |
+| **Blocked** | No | No | Complete halt - no trading operations allowed |
+
+**Circuit Breaker Integration:**
+
+When the circuit breaker triggers (daily loss > 5% or 3 consecutive losses):
+1. Trading mode is automatically set to **exit_only**
+2. `changed_by` is set to `"circuit_breaker"` with a reason explaining the trigger
+3. Users can manually switch back to **enabled** via the dashboard if they deem it safe
+
+This gives users control while still providing automatic protection against catastrophic losses.
+
+**API Endpoints:**
+
+```ruby
+# Get current mode
+GET /api/v1/trading_mode/current
+# => { mode: "enabled", can_open: true, can_close: true, reason: null, changed_by: "system", updated_at: "..." }
+
+# Switch mode
+PUT /api/v1/trading_mode/switch
+# Body: { mode: "exit_only", reason: "Manual pause for maintenance" }
+# => { mode: "exit_only", can_open: false, can_close: true, ... }
+```
+
+**Code Usage:**
+
+```ruby
+# Get current mode
+TradingMode.current           # => TradingMode instance (singleton)
+TradingMode.current.mode      # => "enabled"
+TradingMode.current.can_open? # => true
+TradingMode.current.can_close? # => true
+
+# Switch mode
+TradingMode.switch_to!("exit_only", changed_by: "api", reason: "Manual pause")
+TradingMode.switch_to!("blocked", changed_by: "api", reason: "Maintenance window")
+TradingMode.switch_to!("enabled", changed_by: "api")
+
+# Circuit breaker integration (automatic)
+# When circuit breaker triggers, it calls:
+TradingMode.switch_to!("exit_only", changed_by: "circuit_breaker", reason: "Daily loss exceeded 5%")
+```
+
+**TradingCycle Integration:**
+
+The trading cycle checks the trading mode before executing decisions:
+
+1. If mode is **blocked**: Entire cycle is skipped (no market analysis)
+2. If mode is **exit_only**: Only close operations are approved; open operations are filtered out
+3. If mode is **enabled**: Normal operation
+
+**WebSocket Updates:**
+
+When the mode changes (manually or via circuit breaker), a `trading_mode_update` message is broadcast to all connected dashboard clients for real-time UI updates.
+
 ### 6. Risk Monitoring (RiskMonitoringJob - every minute)
 
 Continuous monitoring of open positions for SL/TP triggers and circuit breaker status.
@@ -1271,6 +1337,8 @@ calculated_pnl = current_balance - initial_balance - total_deposits + total_with
 | `/api/v1/account_balances` | GET | Balance history (paginated with filters) |
 | `/api/v1/account_balances/:id` | GET | Single balance record details |
 | `/api/v1/account_balances/summary` | GET | Balance summary with calculated PnL |
+| `/api/v1/trading_mode/current` | GET | Current trading mode and permissions |
+| `/api/v1/trading_mode/switch` | PUT | Switch trading mode (enabled/exit_only/blocked) |
 
 **WebSocket Channels:**
 
@@ -1278,7 +1346,7 @@ calculated_pnl = current_balance - initial_balance - total_deposits + total_with
 // Connect to dashboard channel for real-time updates
 const subscription = cable.subscriptions.create("DashboardChannel", {
   received(data) {
-    // data.type: market_update, position_update, decision_update, macro_strategy_update
+    // data.type: market_update, position_update, decision_update, macro_strategy_update, risk_profile_update, trading_mode_update
     console.log(data);
   }
 });

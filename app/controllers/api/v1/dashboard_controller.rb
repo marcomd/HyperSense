@@ -24,7 +24,8 @@ module Api
           recent_decisions: recent_decisions,
           system_status: system_status,
           cost_summary: cost_summary,
-          risk_profile: current_risk_profile
+          risk_profile: current_risk_profile,
+          trading_mode: current_trading_mode
         }
       end
 
@@ -388,6 +389,23 @@ module Api
           name: profile.name,
           parameters: Risk::ProfileService.current_params,
           updated_at: profile.updated_at.iso8601
+        }
+      end
+
+      # Build current trading mode data for dashboard display
+      #
+      # Returns the active trading mode and its permissions.
+      #
+      # @return [Hash] Trading mode with mode, reason, changed_by, permissions, and metadata
+      def current_trading_mode
+        mode = TradingMode.current
+        {
+          mode: mode.mode,
+          reason: mode.reason,
+          changed_by: mode.changed_by,
+          can_open: mode.can_open?,
+          can_close: mode.can_close?,
+          updated_at: mode.updated_at.iso8601
         }
       end
     end

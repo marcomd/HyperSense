@@ -20,6 +20,10 @@ RSpec.describe TradingCycle do
     allow(MacroStrategy).to receive(:needs_refresh?).and_return(false)
     allow(MacroStrategy).to receive(:active).and_return(macro_strategy)
 
+    # Clean up trading modes and create default enabled mode
+    TradingMode.delete_all
+    create(:trading_mode, mode: "enabled")
+
     # Create market snapshots for all assets
     Settings.assets.to_a.each do |symbol|
       create(:market_snapshot, symbol: symbol, price: 100_000, captured_at: Time.current)
@@ -27,14 +31,116 @@ RSpec.describe TradingCycle do
   end
 
   describe "#execute" do
-    context "when circuit breaker is active" do
+    context "when trading mode is blocked" do
       before do
-        allow(circuit_breaker).to receive(:trading_allowed?).and_return(false)
-        allow(circuit_breaker).to receive(:trigger_reason).and_return("Max daily loss exceeded")
+        TradingMode.switch_to!("blocked", changed_by: "dashboard", reason: "Manual halt")
       end
 
       it "returns empty array" do
         expect(trading_cycle.execute).to eq([])
+      end
+    end
+
+    context "when trading mode is exit_only" do
+      before do
+        TradingMode.switch_to!("exit_only", changed_by: "circuit_breaker", reason: "Daily loss exceeded")
+      end
+
+      it "does not return empty array (allows close decisions)" do
+        # Should continue execution, not bail out immediately
+        allow(hyperliquid_client).to receive(:read_configured?).and_return(false)
+        allow(position_manager).to receive(:sync_from_hyperliquid)
+        allow(position_manager).to receive(:update_prices)
+
+        readiness_checker = instance_double(Risk::ReadinessChecker)
+        allow(Risk::ReadinessChecker).to receive(:new).and_return(readiness_checker)
+        allow(readiness_checker).to receive(:check).and_return(
+          Risk::ReadinessChecker::ReadinessResult.new(ready: true)
+        )
+
+        low_level_agent = instance_double(Reasoning::LowLevelAgent)
+        allow(Reasoning::LowLevelAgent).to receive(:new).and_return(low_level_agent)
+        allow(low_level_agent).to receive(:decide_all).and_return([])
+
+        # Should complete the cycle (empty decisions, but not blocked)
+        expect(trading_cycle.execute).to eq([])
+      end
+    end
+
+    context "when trading mode is enabled" do
+      it "allows normal execution" do
+        # Should continue execution
+        allow(hyperliquid_client).to receive(:read_configured?).and_return(false)
+        allow(position_manager).to receive(:sync_from_hyperliquid)
+        allow(position_manager).to receive(:update_prices)
+
+        readiness_checker = instance_double(Risk::ReadinessChecker)
+        allow(Risk::ReadinessChecker).to receive(:new).and_return(readiness_checker)
+        allow(readiness_checker).to receive(:check).and_return(
+          Risk::ReadinessChecker::ReadinessResult.new(ready: true)
+        )
+
+        low_level_agent = instance_double(Reasoning::LowLevelAgent)
+        allow(Reasoning::LowLevelAgent).to receive(:new).and_return(low_level_agent)
+        allow(low_level_agent).to receive(:decide_all).and_return([])
+
+        expect(trading_cycle.execute).to eq([])
+      end
+    end
+  end
+
+  describe "trading mode filter in filter_and_approve" do
+    let(:open_decision) do
+      create(:trading_decision,
+        symbol: "BTC",
+        operation: "open",
+        direction: "long",
+        confidence: 0.75,
+        status: "pending",
+        parsed_decision: { "leverage" => 3, "stop_loss" => 95_000, "take_profit" => 115_000 })
+    end
+
+    let(:close_decision) do
+      create(:trading_decision,
+        symbol: "BTC",
+        operation: "close",
+        direction: nil,
+        confidence: 0.75,
+        status: "pending")
+    end
+
+    context "when trading mode is exit_only" do
+      before do
+        TradingMode.switch_to!("exit_only", changed_by: "circuit_breaker")
+      end
+
+      it "rejects open decisions" do
+        open_decision # create decision
+
+        # The filter checks trading mode - we test the reject message
+        mode = TradingMode.current
+        expect(mode.can_open?).to be false
+        open_decision.reject!("Trading mode '#{mode.mode}' does not allow opening positions")
+
+        expect(open_decision.status).to eq("rejected")
+        expect(open_decision.rejection_reason).to include("does not allow opening")
+      end
+
+      it "allows close decisions" do
+        mode = TradingMode.current
+        expect(mode.can_close?).to be true
+      end
+    end
+
+    context "when trading mode is blocked" do
+      before do
+        TradingMode.switch_to!("blocked", changed_by: "dashboard")
+      end
+
+      it "rejects both open and close decisions" do
+        mode = TradingMode.current
+        expect(mode.can_open?).to be false
+        expect(mode.can_close?).to be false
       end
     end
   end

@@ -9,6 +9,7 @@
 #   - macro_strategy_update: New macro strategy
 #   - system_status_update: System health changes
 #   - risk_profile_update: Risk profile changes (cautious/moderate/fearless)
+#   - trading_mode_update: Trading mode changes (enabled/exit_only/blocked)
 #
 class DashboardChannel < ApplicationCable::Channel
   def subscribed
@@ -71,6 +72,21 @@ class DashboardChannel < ApplicationCable::Channel
           changed_by: profile.changed_by,
           parameters: Risk::ProfileService.current_params,
           updated_at: profile.updated_at.iso8601
+        },
+        timestamp: Time.current.iso8601
+      })
+    end
+
+    def broadcast_trading_mode_update(mode)
+      ActionCable.server.broadcast("dashboard", {
+        type: "trading_mode_update",
+        data: {
+          mode: mode.mode,
+          reason: mode.reason,
+          changed_by: mode.changed_by,
+          can_open: mode.can_open?,
+          can_close: mode.can_close?,
+          updated_at: mode.updated_at.iso8601
         },
         timestamp: Time.current.iso8601
       })
