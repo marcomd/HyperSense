@@ -37,7 +37,7 @@ module Api
         unless RiskProfile::PROFILES.include?(profile_name)
           return render json: {
             error: "Invalid profile: #{profile_name}. Valid profiles: #{RiskProfile::PROFILES.join(', ')}"
-          }, status: :unprocessable_entity
+          }, status: :unprocessable_content
         end
 
         RiskProfile.switch_to!(profile_name, changed_by: "dashboard")

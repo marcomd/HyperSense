@@ -2,6 +2,25 @@
 
 All notable changes to HyperSense.
 
+## [1.0.1] - 2026-01-11
+
+### Fixed
+- **Rack Status Code Deprecation** - Changed `:unprocessable_entity` to `:unprocessable_content`
+  - Updated `TradingModesController` and `RiskProfilesController` to use new status code
+  - Updated corresponding request specs to expect `:unprocessable_content`
+  - Fixes: "Status code :unprocessable_entity is deprecated and will be removed in a future version of Rack"
+
+- **RubyLLM acts_as Deprecation** - Enabled new acts_as API in RubyLLM configuration
+  - Added `config.use_new_acts_as = true` to `config/initializers/ruby_llm.rb`
+  - Fixes: "RubyLLM's legacy acts_as API is deprecated and will be removed in RubyLLM 2.0.0"
+
+### Technical Details
+- Updated: `app/controllers/api/v1/trading_modes_controller.rb`
+- Updated: `app/controllers/api/v1/risk_profiles_controller.rb`
+- Updated: `spec/requests/api/v1/trading_modes_spec.rb`
+- Updated: `spec/requests/api/v1/risk_profiles_spec.rb`
+- Updated: `config/initializers/ruby_llm.rb`
+
 ## [1.0.0] - 2026-01-11
 
 ### Added

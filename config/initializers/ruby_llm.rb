@@ -13,6 +13,11 @@
 # - OPENAI_API_KEY, OPENAI_MODEL
 #
 RubyLLM.configure do |config|
+  # Use the new acts_as API (prevents deprecation warning)
+  # Note: This project doesn't use acts_as ActiveRecord integration,
+  # but we enable the new API to suppress the deprecation warning.
+  config.use_new_acts_as = true
+
   # Anthropic configuration
   if Settings.llm.anthropic.api_key.present?
     config.anthropic_api_key = Settings.llm.anthropic.api_key

@@ -131,7 +131,7 @@ RSpec.describe "Api::V1::TradingModes", type: :request do
     it "returns error for invalid mode" do
       put "/api/v1/trading_mode/switch", params: { mode: "invalid" }
 
-      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response).to have_http_status(:unprocessable_content)
       json = response.parsed_body
 
       expect(json["error"]).to include("Invalid mode")

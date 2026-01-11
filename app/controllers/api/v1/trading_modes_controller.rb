@@ -40,7 +40,7 @@ module Api
         unless TradingMode::MODES.include?(mode_name)
           return render json: {
             error: "Invalid mode: #{mode_name}. Valid modes: #{TradingMode::MODES.join(', ')}"
-          }, status: :unprocessable_entity
+          }, status: :unprocessable_content
         end
 
         TradingMode.switch_to!(mode_name, changed_by: "dashboard", reason: reason)

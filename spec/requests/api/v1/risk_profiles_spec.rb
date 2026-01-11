@@ -109,7 +109,7 @@ RSpec.describe "Api::V1::RiskProfiles", type: :request do
     it "returns error for invalid profile" do
       put "/api/v1/risk_profile/switch", params: { profile: "invalid" }
 
-      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response).to have_http_status(:unprocessable_content)
       json = response.parsed_body
 
       expect(json["error"]).to include("Invalid profile")
