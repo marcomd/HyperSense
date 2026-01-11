@@ -1,7 +1,7 @@
 source "https://rubygems.org"
 
 # Bundle edge Rails instead: gem "rails", github: "rails/rails", branch: "main"
-gem "rails", "~> 8.1.1"
+gem "rails", "~> 8.1.2"
 # Override transitive dependency to fix CVE (GHSA-g9jg-w8vm-g96v)
 # Pulled in by rails → actiontext, even though ActionText is not used (API-only app)
 gem "action_text-trix", ">= 2.1.16"
