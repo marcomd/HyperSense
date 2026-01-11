@@ -204,11 +204,15 @@ module Api
 
       # Fetch and serialize recent trading decisions
       #
-      # Returns the 5 most recent trading decisions with key data including volatility level.
+      # Returns the 5 most recent trading decisions with key data including volatility level,
+      # linked order and position data for displaying P&L outcomes on the dashboard.
       #
       # @return [Array<Hash>] Array of decision hashes
       def recent_decisions
-        TradingDecision.recent.limit(RECENT_DECISIONS_LIMIT).map do |d|
+        TradingDecision.recent.includes(order: :position).limit(RECENT_DECISIONS_LIMIT).map do |d|
+          order = d.order
+          position = order&.position
+
           {
             id: d.id,
             symbol: d.symbol,
@@ -216,11 +220,20 @@ module Api
             direction: d.direction,
             confidence: d.confidence&.to_f,
             status: d.status,
+            executed: d.executed,
+            rejection_reason: d.rejection_reason,
+            leverage: d.leverage,
+            stop_loss: d.stop_loss,
+            take_profit: d.take_profit,
             reasoning: d.reasoning,
             volatility_level: d.volatility_level,
+            atr_value: d.atr_value&.to_f,
+            next_cycle_interval: d.next_cycle_interval,
             risk_profile_name: d.risk_profile_name,
             llm_model: d.llm_model,
-            created_at: d.created_at.iso8601
+            created_at: d.created_at.iso8601,
+            order: serialize_decision_order_summary(order),
+            position: serialize_decision_position_summary(position)
           }
         end
       end
@@ -407,6 +420,60 @@ module Api
           can_close: mode.can_close?,
           updated_at: mode.updated_at.iso8601
         }
+      end
+
+      # Serializes order summary for decision response on dashboard
+      #
+      # @param order [Order, nil] The order to serialize
+      # @return [Hash, nil] Order summary or nil
+      def serialize_decision_order_summary(order)
+        return nil unless order
+
+        {
+          id: order.id,
+          status: order.status,
+          side: order.side,
+          size: order.size&.to_f,
+          filled_size: order.filled_size&.to_f,
+          average_fill_price: order.average_fill_price&.to_f,
+          filled_at: order.filled_at&.iso8601
+        }
+      end
+
+      # Serializes position summary with outcome for decision response on dashboard
+      #
+      # @param position [Position, nil] The position to serialize
+      # @return [Hash, nil] Position summary with outcome or nil
+      def serialize_decision_position_summary(position)
+        return nil unless position
+
+        {
+          id: position.id,
+          status: position.status,
+          direction: position.direction,
+          entry_price: position.entry_price&.to_f,
+          current_price: position.current_price&.to_f,
+          realized_pnl: position.realized_pnl&.to_f,
+          unrealized_pnl: position.unrealized_pnl&.to_f,
+          pnl_percent: position.pnl_percent&.round(2),
+          close_reason: position.close_reason,
+          closed_at: position.closed_at&.iso8601,
+          outcome: decision_position_outcome(position)
+        }
+      end
+
+      # Determines position outcome (win/loss/breakeven/nil for open)
+      #
+      # @param position [Position] The position to evaluate
+      # @return [String, nil] Outcome label or nil if still open
+      def decision_position_outcome(position)
+        return nil unless position.closed?
+
+        pnl = position.realized_pnl.to_d
+        return "win" if pnl.positive?
+        return "loss" if pnl.negative?
+
+        "breakeven"
       end
     end
   end

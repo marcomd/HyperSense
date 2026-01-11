@@ -2,6 +2,20 @@
 
 All notable changes to HyperSense.
 
+## [0.40.0] - 2026-01-11
+
+### Added
+- **Dashboard Decision-Position Linkage** - Added order/position data in Dashboard API
+  - The DashboardController's `recent_decisions` method was not including order and position data
+  - Added `includes(order: :position)` for eager loading to prevent N+1 queries
+  - Added `order` and `position` serialization to match DecisionsController format
+  - Also added missing fields: `executed`, `rejection_reason`, `leverage`, `stop_loss`, `take_profit`, `atr_value`, `next_cycle_interval`
+  - Dashboard now correctly displays position P&L outcomes for linked decisions
+
+### Technical Details
+- Updated: `app/controllers/api/v1/dashboard_controller.rb`
+- Added: `serialize_decision_order_summary`, `serialize_decision_position_summary`, `decision_position_outcome` private methods
+
 ## [0.39.0] - 2026-01-08
 
 ### Added
