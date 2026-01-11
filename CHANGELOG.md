@@ -2,6 +2,56 @@
 
 All notable changes to HyperSense.
 
+## [1.0.0] - 2026-01-11
+
+### Added
+- **Peak Tracking & Profit Protection** - Smart exit decision support for the trading agent
+  - Position model now tracks `peak_price` (best price since entry) and `peak_price_at` (when peak occurred)
+  - Added `drawdown_from_peak_pct` to measure how far price has fallen from peak
+  - Added `profit_drawdown_from_peak_pct` to detect when profits are fading
+  - Added `minutes_since_peak` for time-based analysis
+
+- **Trailing Stop Manager** - Automatic profit protection mechanism
+  - New `Risk::TrailingStopManager` service that moves stop-loss as price moves favorably
+  - Activates when position reaches profile-specific profit threshold (1.5-2%)
+  - Trails behind peak price by profile-specific distance (0.8-1.5%)
+  - Never moves stop-loss in unfavorable direction (only locks in more profit)
+  - `RiskMonitoringJob` now includes trailing stop updates before SL/TP checks
+
+- **Momentum Detection** - Trend reversal signals for the LLM agent
+  - `ContextAssembler` now includes `momentum_signals` with RSI trend, MACD momentum, and RSI divergence
+  - Bearish/bullish divergence detection (price vs RSI direction mismatch)
+  - LLM agent uses momentum data to identify early exit opportunities
+
+- **Profile-Specific TP Zone & Profit Protection** - Configurable take-profit behavior
+  - New settings in `settings.yml` for each profile: `tp_zone_pct`, `profit_drawdown_alert_pct`, `trailing_stop`
+  - Cautious: 3% TP zone, 25% profit alert, 1.5% trail distance
+  - Moderate: 2% TP zone, 30% profit alert, 1% trail distance
+  - Fearless: 1.5% TP zone, 40% profit alert, 0.8% trail distance
+  - `ProfileService` accessors for all new settings
+
+- **Enhanced Position Data for LLM** - Better context for close decisions
+  - Distance metrics: `pct_to_stop_loss`, `pct_to_take_profit`, `is_in_tp_zone`, `is_near_sl`
+  - Peak tracking data in context: peak price, drawdown, profit drawdown, minutes since peak
+  - Trailing stop status: active flag, original stop-loss before trailing started
+
+### Changed
+- **LowLevelAgent CLOSE Rules** - Data-driven exit decisions
+  - Updated system prompt with new CLOSE conditions using peak tracking and momentum data
+  - Agent can now close based on: TP zone entry, profit drawdown from peak, momentum reversal, RSI divergence
+  - Added momentum analysis section to user prompt
+  - Enhanced position display with peak tracking, distance metrics, and trailing stop status
+
+- **PositionManager** - Peak tracking integration
+  - `update_prices` now also updates peak price for each position
+  - Logs count of new peaks set during each price update
+
+### Technical Details
+- New files: `app/services/risk/trailing_stop_manager.rb`
+- New migration: `add_peak_and_trailing_stop_to_positions` (peak_price, peak_price_at, trailing_stop_active, original_stop_loss_price)
+- Updated: `position.rb`, `profile_service.rb`, `context_assembler.rb`, `position_manager.rb`, `risk_monitoring_job.rb`, `low_level_agent.rb`
+- Updated: `config/settings.yml` with profile-specific profit protection settings
+
 ## [0.40.0] - 2026-01-11
 
 ### Added

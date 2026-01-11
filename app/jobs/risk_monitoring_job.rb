@@ -4,6 +4,7 @@
 #
 # Runs every minute via Solid Queue to:
 # - Check all open positions for stop-loss/take-profit triggers
+# - Update trailing stops based on peak prices
 # - Update circuit breaker metrics
 # - Log monitoring summary
 #
@@ -18,18 +19,34 @@ class RiskMonitoringJob < ApplicationJob
   def perform
     logger.info "[RiskMonitoringJob] Starting risk monitoring cycle"
 
+    trailing_stop_results = update_trailing_stops
     stop_loss_results = check_stop_loss_take_profit
     circuit_breaker_status = update_circuit_breaker
 
-    log_summary(stop_loss_results, circuit_breaker_status)
+    log_summary(stop_loss_results, trailing_stop_results, circuit_breaker_status)
 
     {
+      trailing_stop_results: trailing_stop_results,
       stop_loss_results: stop_loss_results,
       circuit_breaker_status: circuit_breaker_status
     }
   end
 
   private
+
+  # Update trailing stops for all open positions.
+  # Runs before SL/TP check so updated SL is used.
+  def update_trailing_stops
+    trailing_stop_manager = Risk::TrailingStopManager.new
+    results = trailing_stop_manager.check_all_positions
+
+    if results[:activated].positive? || results[:updated].positive?
+      logger.info "[RiskMonitoringJob] Trailing stops: #{results[:activated]} activated, " \
+                  "#{results[:updated]} updated"
+    end
+
+    results
+  end
 
   def check_stop_loss_take_profit
     stop_loss_manager = Risk::StopLossManager.new
@@ -55,10 +72,11 @@ class RiskMonitoringJob < ApplicationJob
     status
   end
 
-  def log_summary(stop_loss_results, circuit_breaker_status)
+  def log_summary(stop_loss_results, trailing_stop_results, circuit_breaker_status)
     logger.info "[RiskMonitoringJob] Summary: " \
                 "Positions checked=#{stop_loss_results[:checked]}, " \
-                "Triggers=#{stop_loss_results[:triggered].size}, " \
+                "SL/TP triggers=#{stop_loss_results[:triggered].size}, " \
+                "Trailing stops updated=#{trailing_stop_results[:updated]}, " \
                 "Trading allowed=#{circuit_breaker_status[:trading_allowed]}"
   end
 end

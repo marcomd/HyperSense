@@ -29,6 +29,10 @@
 #  risk_amount       :decimal          # $ at risk based on SL distance
 #  realized_pnl      :decimal          default(0)
 #  close_reason      :string           # sl_triggered, tp_triggered, manual, signal
+#  peak_price        :decimal          # highest price since entry (for longs) or lowest (for shorts)
+#  peak_price_at     :datetime         # when peak was reached
+#  trailing_stop_active :boolean       default(false) # whether trailing stop is active
+#  original_stop_loss_price :decimal   # SL before trailing stop started moving it
 #  created_at        :datetime         not null
 #  updated_at        :datetime         not null
 #
@@ -227,6 +231,82 @@ class Position < ApplicationRecord
     else
       ((current_price - take_profit_price) / current_price * 100).to_f
     end
+  end
+
+  # Peak Tracking
+
+  # Update peak price if current price is better than previous peak.
+  # For longs, peak is the highest price. For shorts, peak is the lowest price.
+  # @param price [Numeric] Current market price
+  # @return [Boolean] true if peak was updated
+  def update_peak_price!(price)
+    return false unless open?
+
+    should_update = if long?
+      peak_price.nil? || price > peak_price
+    else
+      peak_price.nil? || price < peak_price
+    end
+
+    if should_update
+      update!(peak_price: price, peak_price_at: Time.current)
+      true
+    else
+      false
+    end
+  end
+
+  # Calculate drawdown from peak as percentage.
+  # Measures how far current price has fallen from peak (for longs) or risen (for shorts).
+  # @return [Float] Drawdown percentage (0 means at peak, positive means below peak)
+  def drawdown_from_peak_pct
+    return 0.0 unless peak_price && current_price && peak_price.to_f > 0
+
+    if long?
+      ((peak_price - current_price).to_f / peak_price.to_f * 100).round(2)
+    else
+      ((current_price - peak_price).to_f / peak_price.to_f * 100).round(2)
+    end
+  end
+
+  # Calculate profit drawdown from peak.
+  # Measures what percentage of peak profit has been lost.
+  # Example: Peaked at +3% profit, now at +2% = 33% profit drawdown.
+  # @return [Float] Profit drawdown percentage (0-100)
+  def profit_drawdown_from_peak_pct
+    return 0.0 unless peak_price && entry_price && current_price
+
+    # Calculate profit percentage at peak
+    peak_pnl_pct = if long?
+      (peak_price.to_f - entry_price.to_f) / entry_price.to_f * 100
+    else
+      (entry_price.to_f - peak_price.to_f) / entry_price.to_f * 100
+    end
+
+    # If never was profitable, no profit drawdown
+    return 0.0 if peak_pnl_pct <= 0
+
+    current_pnl_pct = pnl_percent
+
+    # If still at or above peak profit, no drawdown
+    return 0.0 if current_pnl_pct >= peak_pnl_pct
+
+    # Calculate percentage of peak profit that has been lost
+    ((peak_pnl_pct - current_pnl_pct) / peak_pnl_pct * 100).round(2)
+  end
+
+  # Minutes since peak price was reached.
+  # @return [Integer, nil] Minutes since peak, or nil if no peak recorded
+  def minutes_since_peak
+    return nil unless peak_price_at
+
+    ((Time.current - peak_price_at) / 60).round
+  end
+
+  # Check if position has trailing stop activated.
+  # @return [Boolean]
+  def trailing_stop_active?
+    trailing_stop_active == true
   end
 
   # Trading Fees (calculated on-the-fly)

@@ -1,6 +1,6 @@
 # HyperSense
 
-**Version 0.40.0** | Autonomous AI Trading Agent for cryptocurrency markets.
+**Version 1.0.0** | Autonomous AI Trading Agent for cryptocurrency markets.
 
 ![HyperSense_cover1.jpg](docs/HyperSense_cover1.jpg)
 
@@ -209,7 +209,7 @@ Users can select a risk profile from the dashboard to adjust trading behavior:
 | Frequency | Job | Purpose |
 |-----------|-----|---------|
 | Every minute | MarketSnapshotJob | Collect prices, indicators, sentiment |
-| Every minute | RiskMonitoringJob | Monitor SL/TP, circuit breaker |
+| Every minute | RiskMonitoringJob | Monitor SL/TP, trailing stops, circuit breaker |
 | Dynamic (3-25 min) | TradingCycleJob | Main trading orchestration |
 | Daily (6am) | MacroStrategyJob | High-level market analysis |
 | Every 30 min | BootstrapTradingCycleJob | Safety net to restart trading |
@@ -919,6 +919,69 @@ The trading cycle checks the trading mode before executing decisions:
 **WebSocket Updates:**
 
 When the mode changes (manually or via circuit breaker), a `trading_mode_update` message is broadcast to all connected dashboard clients for real-time UI updates.
+
+### 5.3 Peak Tracking & Trailing Stop
+
+HyperSense tracks position performance with advanced profit protection features:
+
+**Peak Tracking** - Monitors the highest price since position entry:
+- `peak_price` - Best price achieved during the position
+- `peak_price_at` - When the peak occurred
+- `drawdown_from_peak_pct` - How far price has fallen from peak
+- `profit_drawdown_from_peak_pct` - What percentage of peak profit has been lost
+
+This data is provided to the LLM agent, enabling it to make informed exit decisions when profits start fading.
+
+**Trailing Stop** - Automatically protects profits by moving stop-loss as price moves favorably:
+- Activates when position reaches activation threshold (profile-specific)
+- Moves stop-loss up as price rises (for longs) or down (for shorts)
+- Never moves stop-loss in an unfavorable direction
+- Profile-specific settings:
+
+| Profile | Activation | Trail Distance |
+|---------|------------|----------------|
+| Cautious | 2% profit | 1.5% behind peak |
+| Moderate | 1.5% profit | 1% behind peak |
+| Fearless | 2% profit | 0.8% behind peak |
+
+**Momentum Detection** - Identifies potential trend reversals:
+- `rsi_trend` - Is RSI rising, falling, or flat?
+- `macd_momentum` - Is momentum accelerating or decelerating?
+- `rsi_divergence` - Bearish divergence (price up but RSI down) warns of reversal
+
+**Profile-Specific Take-Profit Zones:**
+
+Each risk profile has a different "TP Zone" threshold where the agent considers closing:
+
+| Profile | TP Zone | Profit Alert Threshold |
+|---------|---------|------------------------|
+| Cautious | 3% from TP | 25% profit lost from peak |
+| Moderate | 2% from TP | 30% profit lost from peak |
+| Fearless | 1.5% from TP | 40% profit lost from peak |
+
+When a position enters the TP Zone OR loses more than the profit alert threshold from its peak, the agent receives a clear signal to consider closing.
+
+**Code Usage:**
+
+```ruby
+# Peak tracking (automatically updated on price changes)
+position.peak_price                    # => 105000.0
+position.peak_price_at                 # => 2025-01-11 12:00:00
+position.drawdown_from_peak_pct        # => 0.5 (0.5% below peak)
+position.profit_drawdown_from_peak_pct # => 15.0 (15% of peak profit lost)
+position.minutes_since_peak            # => 45
+
+# Trailing stop
+position.trailing_stop_active?         # => true
+position.original_stop_loss_price      # => 94000 (SL before trailing started)
+
+# Profile settings
+Risk::ProfileService.tp_zone_pct                    # => 0.02 (2%)
+Risk::ProfileService.profit_drawdown_alert_pct      # => 0.30 (30%)
+Risk::ProfileService.trailing_stop_enabled?         # => true
+Risk::ProfileService.trailing_stop_activation_pct   # => 0.015 (1.5%)
+Risk::ProfileService.trailing_stop_trail_distance_pct # => 0.01 (1%)
+```
 
 ### 6. Risk Monitoring (RiskMonitoringJob - every minute)
 

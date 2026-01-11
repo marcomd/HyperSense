@@ -77,6 +77,13 @@ risk_profiles:
     max_position_size: 0.03       # 3% max position
     default_leverage: 2           # Lower leverage
     max_open_positions: 3         # Fewer concurrent positions
+    # Profit Protection Settings
+    tp_zone_pct: 0.03             # 3% from TP = consider closing (take profits earlier)
+    profit_drawdown_alert_pct: 0.25  # Alert if 25% of peak profit is lost
+    trailing_stop:
+      enabled: true
+      activation_profit_pct: 0.02   # Activate at 2% profit
+      trail_distance_pct: 0.015     # Trail 1.5% behind peak
   moderate:
     rsi_oversold: 30              # Standard oversold threshold
     rsi_overbought: 70            # Standard overbought threshold
@@ -87,6 +94,13 @@ risk_profiles:
     max_position_size: 0.05       # 5% max position
     default_leverage: 3           # Standard leverage
     max_open_positions: 5         # Standard positions
+    # Profit Protection Settings
+    tp_zone_pct: 0.02             # 2% from TP = consider closing (balanced)
+    profit_drawdown_alert_pct: 0.30  # Alert if 30% of peak profit is lost
+    trailing_stop:
+      enabled: true
+      activation_profit_pct: 0.015  # Activate at 1.5% profit
+      trail_distance_pct: 0.01      # Trail 1% behind peak
   fearless:
     rsi_oversold: 25              # More aggressive oversold threshold
     rsi_overbought: 75            # More aggressive overbought threshold
@@ -97,6 +111,13 @@ risk_profiles:
     max_position_size: 0.08       # 8% max position
     default_leverage: 5           # Higher leverage
     max_open_positions: 7         # More concurrent positions
+    # Profit Protection Settings
+    tp_zone_pct: 0.015            # 1.5% from TP = consider closing (let winners run)
+    profit_drawdown_alert_pct: 0.40  # Alert if 40% of peak profit is lost (more tolerance)
+    trailing_stop:
+      enabled: true
+      activation_profit_pct: 0.02   # Activate at 2% profit
+      trail_distance_pct: 0.008     # Trail 0.8% behind peak (tighter)
 
 # Context Weights for Reasoning
 # Technical indicators are the primary signal (proven, based on actual price action)

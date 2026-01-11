@@ -82,6 +82,40 @@ module Risk
         current_params[:max_open_positions]
       end
 
+      # Take-profit zone threshold as decimal (e.g., 0.02 = 2%).
+      # When price is within this percentage of TP, agent should consider closing.
+      # @return [Float]
+      def tp_zone_pct
+        current_params[:tp_zone_pct] || 0.02
+      end
+
+      # Profit drawdown alert threshold as decimal (e.g., 0.30 = 30%).
+      # Alert when this percentage of peak profit has been lost.
+      # @return [Float]
+      def profit_drawdown_alert_pct
+        current_params[:profit_drawdown_alert_pct] || 0.30
+      end
+
+      # Whether trailing stop is enabled for current profile.
+      # @return [Boolean]
+      def trailing_stop_enabled?
+        current_params.dig(:trailing_stop, :enabled) || false
+      end
+
+      # Profit threshold to activate trailing stop as decimal (e.g., 0.015 = 1.5%).
+      # Trailing stop activates when position reaches this profit level.
+      # @return [Float]
+      def trailing_stop_activation_pct
+        current_params.dig(:trailing_stop, :activation_profit_pct) || 0.015
+      end
+
+      # Distance trailing stop follows behind peak price as decimal (e.g., 0.01 = 1%).
+      # Stop-loss is set to (peak_price - trail_distance) for longs.
+      # @return [Float]
+      def trailing_stop_trail_distance_pct
+        current_params.dig(:trailing_stop, :trail_distance_pct) || 0.01
+      end
+
       # Returns the name of the current profile.
       # @return [String]
       def current_name

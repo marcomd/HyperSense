@@ -40,7 +40,9 @@ module Reasoning
         sentiment: current_sentiment,
         macro_context: macro_context(macro_strategy),
         recent_price_action: recent_price_action(@symbol),
-        risk_parameters: risk_parameters
+        risk_parameters: risk_parameters,
+        # Momentum analysis (for exit decisions)
+        momentum_signals: momentum_signals_for(@symbol)
       }
     end
 
@@ -320,16 +322,25 @@ module Reasoning
         max_open_positions: profile.max_open_positions,
         min_risk_reward_ratio: profile.min_risk_reward_ratio,
         rsi_oversold: profile.rsi_oversold,
-        rsi_overbought: profile.rsi_overbought
+        rsi_overbought: profile.rsi_overbought,
+        # Profit protection settings (profile-specific)
+        tp_zone_pct: profile.tp_zone_pct,
+        profit_drawdown_alert_pct: profile.profit_drawdown_alert_pct,
+        trailing_stop_enabled: profile.trailing_stop_enabled?,
+        trailing_stop_activation_pct: profile.trailing_stop_activation_pct,
+        trailing_stop_trail_distance_pct: profile.trailing_stop_trail_distance_pct
       }
     end
 
-    # Get current position information for a symbol
+    # Get current position information for a symbol.
+    # Includes distance metrics, peak tracking data, and trailing stop status.
     # @param symbol [String] Asset symbol
     # @return [Hash] Position data or indication of no position
     def current_position_for(symbol)
       position = @position_manager.get_open_position(symbol)
       return { has_position: false } unless position
+
+      profile = Risk::ProfileService
 
       {
         has_position: true,
@@ -342,8 +353,110 @@ module Reasoning
         leverage: position.leverage,
         stop_loss_price: position.stop_loss_price&.to_f,
         take_profit_price: position.take_profit_price&.to_f,
-        opened_at: position.opened_at&.iso8601
+        opened_at: position.opened_at&.iso8601,
+
+        # Distance metrics (pre-calculated for LLM)
+        position_age_minutes: position.opened_at ? ((Time.current - position.opened_at) / 60).round : 0,
+        pct_to_stop_loss: position.stop_loss_distance_pct&.round(2),
+        pct_to_take_profit: position.take_profit_distance_pct&.round(2),
+        is_in_tp_zone: in_tp_zone?(position, profile),
+        is_near_sl: near_stop_loss?(position),
+
+        # Peak tracking (for profit protection decisions)
+        peak_price: position.peak_price&.to_f,
+        peak_price_at: position.peak_price_at&.iso8601,
+        drawdown_from_peak_pct: position.drawdown_from_peak_pct,
+        profit_drawdown_from_peak_pct: position.profit_drawdown_from_peak_pct,
+        minutes_since_peak: position.minutes_since_peak,
+
+        # Trailing stop status
+        trailing_stop_active: position.trailing_stop_active?,
+        original_stop_loss_price: position.original_stop_loss_price&.to_f
       }
+    end
+
+    # Check if position is in the take-profit zone.
+    # @param position [Position] Position to check
+    # @param profile [Risk::ProfileService] Profile service for threshold
+    # @return [Boolean] true if within TP zone
+    def in_tp_zone?(position, profile)
+      tp_distance = position.take_profit_distance_pct
+      return false unless tp_distance
+
+      tp_zone_threshold = profile.tp_zone_pct * 100 # Convert to percentage
+      tp_distance.abs <= tp_zone_threshold
+    end
+
+    # Check if position is near stop-loss (within 1%).
+    # @param position [Position] Position to check
+    # @return [Boolean] true if within 1% of SL
+    def near_stop_loss?(position)
+      sl_distance = position.stop_loss_distance_pct
+      return false unless sl_distance
+
+      sl_distance.abs <= 1.0
+    end
+
+    # Get momentum signals for a symbol.
+    # Analyzes RSI and MACD trends over recent snapshots.
+    # @param symbol [String] Asset symbol
+    # @return [Hash] Momentum signals
+    def momentum_signals_for(symbol)
+      snapshots = MarketSnapshot.for_symbol(symbol).recent.limit(3).to_a
+      return {} if snapshots.size < 2
+
+      rsi_values = snapshots.map { |s| s.indicators&.dig("rsi_14") }.compact
+      macd_histograms = snapshots.map { |s| s.indicators&.dig("macd", "histogram") }.compact
+      prices = snapshots.map(&:price).map(&:to_f)
+
+      {
+        rsi_trend: calculate_trend_direction(rsi_values),
+        macd_momentum: calculate_trend_direction(macd_histograms),
+        price_trend: calculate_trend_direction(prices),
+        rsi_divergence: detect_divergence(prices, rsi_values)
+      }
+    end
+
+    # Calculate trend direction from values.
+    # @param values [Array<Numeric>] Values (newest first)
+    # @return [String] "rising", "falling", or "flat"
+    def calculate_trend_direction(values)
+      return "unknown" if values.size < 2
+
+      newest = values.first
+      oldest = values.last
+      return "unknown" if newest.nil? || oldest.nil?
+
+      diff = newest - oldest
+
+      if diff > 2
+        "rising"
+      elsif diff < -2
+        "falling"
+      else
+        "flat"
+      end
+    end
+
+    # Detect RSI divergence from price.
+    # Bearish divergence: price rising but RSI falling (potential reversal down)
+    # Bullish divergence: price falling but RSI rising (potential reversal up)
+    # @param prices [Array<Float>] Price values (newest first)
+    # @param rsi_values [Array<Float>] RSI values (newest first)
+    # @return [String] "bearish", "bullish", or "none"
+    def detect_divergence(prices, rsi_values)
+      return "none" if prices.size < 2 || rsi_values.size < 2
+
+      price_rising = prices.first > prices.last
+      rsi_rising = rsi_values.first > rsi_values.last
+
+      if price_rising && !rsi_rising
+        "bearish" # Price up but RSI down = potential reversal
+      elsif !price_rising && rsi_rising
+        "bullish" # Price down but RSI up = potential bounce
+      else
+        "none"
+      end
     end
   end
 end

@@ -149,9 +149,11 @@ module Execution
       @logger.info "[PositionManager] Closed position #{position.id} (#{position.symbol})"
     end
 
-    # Update current prices for all open positions
+    # Update current prices and peak tracking for all open positions.
+    # Also updates peak price when new highs (longs) or lows (shorts) are reached.
     def update_prices
       mids = @client.all_mids
+      peak_updates = 0
 
       Position.open.find_each do |position|
         price_str = mids[position.symbol]
@@ -159,9 +161,13 @@ module Execution
 
         new_price = price_str.to_d
         position.update_current_price!(new_price)
+
+        # Update peak tracking (returns true if new peak was set)
+        peak_updates += 1 if position.update_peak_price!(new_price)
       end
 
-      @logger.info "[PositionManager] Updated prices for #{Position.open.count} positions"
+      @logger.info "[PositionManager] Updated prices for #{Position.open.count} positions " \
+                   "(#{peak_updates} new peaks)"
     end
 
     # Check if there's an open position for a symbol

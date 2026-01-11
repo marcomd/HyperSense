@@ -61,20 +61,34 @@ module Reasoning
         - When RSI is #{rsi_pullback}-#{rsi_overbought} and opening LONG, reduce confidence by 0.15
         - When RSI is #{rsi_oversold}-#{rsi_bounce} and opening SHORT, reduce confidence by 0.15
 
-        ## CLOSE Operation Rules (CRITICAL - prevent premature exits)
-        CLOSE operation is ONLY valid when ONE of these conditions is met:
-        1. Price is within 1% of take-profit target
-        2. Price is within 1% of stop-loss level
-        3. CONFIRMED trend reversal: BOTH RSI crosses 50 level AND MACD histogram changes sign
-        4. Position has been held for at least 30 minutes AND shows clear reversal
+        ## CLOSE Operation Rules (data-driven decisions using peak tracking and momentum)
+        You will receive PEAK TRACKING and MOMENTUM data in the position info. Use them wisely.
 
-        Do NOT close due to:
-        - "Technical deterioration" alone
-        - Price moving slightly against position (that's what stop-loss is for!)
-        - Slight indicator changes without confirmed trend reversal
-        - Fear or uncertainty - let the stop-loss protect you
+        CLOSE operation is VALID when ANY of these conditions is met:
 
-        IMPORTANT: Let stop-loss do its job! If price moves against you but hasn't hit SL, HOLD.
+        TAKE PROFIT ZONE (profile-specific threshold):
+        1. Position is marked "is_in_tp_zone: true" (within TP zone threshold)
+        2. Price is within 1% of stop-loss level (is_near_sl: true)
+
+        PROFIT PROTECTION (use peak tracking data):
+        3. profit_drawdown_from_peak_pct > 30% (significant profit fade)
+           Example: Position peaked at +3% profit but is now at +2% = 33% of profit lost
+
+        MOMENTUM REVERSAL (use momentum signals):
+        4. rsi_trend is "falling" AND macd_momentum is "falling" (momentum fading)
+        5. rsi_divergence is "bearish" (price rising but RSI falling = reversal warning)
+
+        STALLED POSITION:
+        6. Position held 4+ hours with < 1% progress toward TP
+
+        Do NOT close for:
+        - Minor pullbacks within normal volatility (let trailing stop handle this)
+        - "Feeling uncertain" without data backing
+        - Small profit drawdowns (< 25%) - these are normal fluctuations
+
+        IMPORTANT: Trailing stop will automatically protect profits once activated.
+        Focus on momentum signals and divergences for early exit opportunities.
+        Let the data guide you, not emotions.
 
         ## Input Weighting System
         You will receive data with assigned weights indicating their importance in your decision:
@@ -244,10 +258,15 @@ module Reasoning
         ## Macro Strategy
         #{format_macro_context(context[:macro_context])}
 
+        ## Momentum Analysis (for exit decisions)
+        #{format_momentum(context[:momentum_signals])}
+
         ## Risk Parameters
         - Max Position: #{(context.dig(:risk_parameters, :max_position_size) || 0.05) * 100}% of capital
         - Max Leverage: #{context.dig(:risk_parameters, :max_leverage) || 10}x
         - Min Confidence: #{(context.dig(:risk_parameters, :min_confidence) || 0.6) * 100}%
+        - TP Zone Threshold: #{(context.dig(:risk_parameters, :tp_zone_pct) || 0.02) * 100}%
+        - Trailing Stop: #{context.dig(:risk_parameters, :trailing_stop_enabled) ? "Enabled" : "Disabled"}
 
         Provide your trading decision in JSON format, weighing inputs according to their assigned weights.
       PROMPT
@@ -269,19 +288,92 @@ module Reasoning
     def format_position(position)
       return "NO POSITION - You can OPEN a new position or HOLD" unless position&.dig(:has_position)
 
+      profile = Risk::ProfileService
+      age_str = format_position_age(position[:position_age_minutes])
+      tp_dist = position[:pct_to_take_profit] ? "#{position[:pct_to_take_profit]}%" : "N/A"
+      sl_dist = position[:pct_to_stop_loss] ? "#{position[:pct_to_stop_loss]}%" : "N/A"
+      tp_zone = position[:is_in_tp_zone] ? "YES - CONSIDER CLOSING" : "No"
+      near_sl = position[:is_near_sl] ? "YES - CAUTION" : "No"
+
+      # Peak tracking info
+      peak_info = if position[:peak_price]
+        "Peak: $#{format_number(position[:peak_price])} (#{position[:minutes_since_peak] || 0} min ago)"
+      else
+        "Peak: Not yet tracked"
+      end
+
+      # Profit drawdown alert
+      profit_drawdown = position[:profit_drawdown_from_peak_pct] || 0
+      profit_alert = if profit_drawdown > (profile.profit_drawdown_alert_pct * 100)
+        " ** PROFIT FADING - #{profit_drawdown.round(1)}% of peak profit lost **"
+      else
+        ""
+      end
+
+      # Trailing stop status
+      trailing = if position[:trailing_stop_active]
+        "ACTIVE (original SL: $#{format_number(position[:original_stop_loss_price])})"
+      else
+        "Not activated"
+      end
+
       <<~POS.strip
         ACTIVE #{position[:direction].upcase} POSITION:
-        - Size: #{position[:size]}
-        - Entry Price: $#{format_number(position[:entry_price])}
-        - Current Price: $#{format_number(position[:current_price])}
-        - Unrealized PnL: $#{format_number(position[:unrealized_pnl])} (#{format_number(position[:pnl_percent])}%)
-        - Leverage: #{position[:leverage]}x
-        - Stop Loss: #{position[:stop_loss_price] ? "$#{format_number(position[:stop_loss_price])}" : "Not set"}
-        - Take Profit: #{position[:take_profit_price] ? "$#{format_number(position[:take_profit_price])}" : "Not set"}
-        - Opened: #{position[:opened_at]}
+        - Entry: $#{format_number(position[:entry_price])} | Current: $#{format_number(position[:current_price])}
+        - Unrealized PnL: $#{format_number(position[:unrealized_pnl])} (#{format_number(position[:pnl_percent])}%)#{profit_alert}
+        - Leverage: #{position[:leverage]}x | Age: #{age_str}
 
-        ACTION OPTIONS: You can CLOSE this position or HOLD (cannot OPEN another)
+        TARGETS:
+        - Stop Loss: $#{format_number(position[:stop_loss_price])} (#{sl_dist} away)
+        - Take Profit: $#{format_number(position[:take_profit_price])} (#{tp_dist} away)
+        - In TP Zone (#{(profile.tp_zone_pct * 100).round(1)}% threshold): #{tp_zone}
+        - Near SL: #{near_sl}
+
+        PEAK TRACKING:
+        - #{peak_info}
+        - Drawdown from Peak: #{position[:drawdown_from_peak_pct] || 0}%
+        - Profit Drawdown: #{profit_drawdown.round(1)}% of peak profit lost
+        - Trailing Stop: #{trailing}
+
+        ACTION OPTIONS: You can CLOSE this position or HOLD
       POS
+    end
+
+    def format_position_age(minutes)
+      return "Unknown" unless minutes
+
+      if minutes < 60
+        "#{minutes} min"
+      elsif minutes < 1440
+        "#{(minutes / 60.0).round(1)} hours"
+      else
+        "#{(minutes / 1440.0).round(1)} days"
+      end
+    end
+
+    def format_momentum(signals)
+      return "No momentum data available" unless signals&.any?
+
+      rsi_trend = signals[:rsi_trend] || "unknown"
+      macd_momentum = signals[:macd_momentum] || "unknown"
+      price_trend = signals[:price_trend] || "unknown"
+      divergence = signals[:rsi_divergence] || "none"
+
+      divergence_warning = case divergence
+      when "bearish"
+        " ** BEARISH DIVERGENCE - price up but RSI down, reversal warning! **"
+      when "bullish"
+        " ** BULLISH DIVERGENCE - price down but RSI up, bounce possible! **"
+      else
+        ""
+      end
+
+      <<~MOM.strip
+        - RSI Trend: #{rsi_trend} (is RSI rising, falling, or flat?)
+        - MACD Momentum: #{macd_momentum} (is momentum accelerating or decelerating?)
+        - Price Trend: #{price_trend}
+        - RSI Divergence: #{divergence}#{divergence_warning}
+      MOM
     end
 
     def format_forecast(forecast)

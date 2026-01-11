@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_01_08_100000) do
+ActiveRecord::Schema[8.1].define(version: 2026_01_11_122134) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -138,6 +138,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_01_08_100000) do
     t.decimal "liquidation_price", precision: 20, scale: 8
     t.decimal "margin_used", precision: 20, scale: 8
     t.datetime "opened_at", null: false
+    t.decimal "original_stop_loss_price", precision: 20, scale: 8
+    t.decimal "peak_price", precision: 20, scale: 8
+    t.datetime "peak_price_at"
     t.decimal "realized_pnl", precision: 20, scale: 8, default: "0.0"
     t.decimal "risk_amount", precision: 20, scale: 8
     t.decimal "size", precision: 20, scale: 8, null: false
@@ -145,6 +148,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_01_08_100000) do
     t.decimal "stop_loss_price", precision: 20, scale: 8
     t.string "symbol", null: false
     t.decimal "take_profit_price", precision: 20, scale: 8
+    t.boolean "trailing_stop_active", default: false
     t.decimal "unrealized_pnl", precision: 20, scale: 8, default: "0.0"
     t.datetime "updated_at", null: false
     t.index ["direction"], name: "index_positions_on_direction"
