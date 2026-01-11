@@ -806,12 +806,24 @@ Risk Profiles allow users to adjust the trading agent's behavior based on their 
 | **Moderate** (default) | 30 | 70 | 60% | 3x | 5 |
 | **Fearless** | 25 | 75 | 50% | 5x | 7 |
 
+**Profit Protection Settings:**
+
+| Profile | TP Zone | Profit Alert | Trailing Activation | Trail Distance |
+|---------|---------|--------------|---------------------|----------------|
+| **Cautious** | 3% | 25% | 2% profit | 1.5% |
+| **Moderate** (default) | 2% | 30% | 1.5% profit | 1% |
+| **Fearless** | 1.5% | 40% | 2% profit | 0.8% |
+
 **How Profiles Affect Trading:**
 
 - **RSI Thresholds**: Define when an asset is considered oversold (buy signal) or overbought (sell signal)
 - **Min Confidence**: LLM decisions below this threshold are rejected
 - **Default Leverage**: Applied when the LLM doesn't specify leverage
 - **Max Positions**: Limits concurrent open positions
+- **TP Zone**: Distance from take-profit where agent considers closing (e.g., 2% means close when within 2% of TP)
+- **Profit Alert**: Alert threshold when peak profit is lost (e.g., 30% means alert if position loses 30% of its peak profit)
+- **Trailing Activation**: Profit threshold to activate trailing stop (e.g., 1.5% means activate when position is 1.5% profitable)
+- **Trail Distance**: How far trailing stop follows behind peak price (e.g., 1% means SL trails 1% below peak)
 
 **API Endpoints:**
 
